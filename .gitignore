@@ -1,0 +1,20 @@
+.tools/
+.runtime/
+.agent/
+.local/
+dist/
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+outputs/
+
+# Private working notes and historical evidence
+active-design.md
+agent-status.md
+handoff-context.md
+implementation-plan.md
+planning-evidence.md
+questions.md
+runtime-checklist.md
+verification.md
