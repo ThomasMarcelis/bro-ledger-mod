@@ -1,4 +1,4 @@
-// Campaign-owned inert data. No tactical definitions are installed with the mod.
+// Campaign-owned inert definitions. Built-in templates remain outside this flag.
 ::BroLedger.LibraryFlag <- "BroLedger.Library";
 ::BroLedger.LibraryLimit <- 32;
 ::BroLedger.ShareLimit <- 48000;
@@ -38,13 +38,17 @@
 };
 ::BroLedger.validBuild <- function(b, defs=null)
 {
-    if(typeof b!="table" || b.len()!=8) return false;
+    if(typeof b!="table" || b.len()!=("weights" in b ? 9 : 8)) return false;
     foreach(k in ["id","label","targets","preferred","route","flex","weaponTags","playstyleTags"]) if(!(k in b)) return false;
     if(!this.validID(b.id) || !this.plainName(b.label,40) || !this.communityTargets(b.targets) ||
         !this.communityTargets(b.preferred) || b.targets.len()!=b.preferred.len() ||
         !this.uniqueStrings(b.route,11) || !this.uniqueStrings(b.flex,11) ||
         !this.uniqueStrings(b.weaponTags,this.WeaponTags.len()) || !this.uniqueStrings(b.playstyleTags,this.PlaystyleTags.len())) return false;
     foreach(k,v in b.targets) if(!(k in b.preferred) || b.preferred[k]<v) return false;
+    if("weights" in b) {
+        if(typeof b.weights!="table" || b.weights.len()!=8) return false;
+        foreach(k in this.Stats) if(!(k in b.weights) || typeof b.weights[k]!="integer" || b.weights[k]<0 || b.weights[k]>10) return false;
+    }
     foreach(id in b.flex) if(b.route.find(id)==null) return false;
     if(b.route.len()>(b.route.find("perk.student")!=null ? 11 : 10)) return false;
     if(b.route.len()==11 && b.route[10]=="perk.student") return false; // The refund cannot fund Student itself.
@@ -56,6 +60,12 @@
     foreach(tag in b.playstyleTags) if(this.PlaystyleTags.find(tag)==null) return false;
     return true;
 };
+::BroLedger.buildWeights <- function(build)
+{
+    if("weights" in build) return this.copy(build.weights);
+    local out={};foreach(k in this.Stats) out[k]<-1;return out;
+};
+::BroLedger.statWeight <- function(weights, key) {return weights==null ? 1 : weights[key];};
 ::BroLedger.findBuild <- function(id, builds)
 {
     foreach(b in builds) if(b.id==id) return b;
@@ -66,17 +76,18 @@
     for(local i=1;i<=this.LibraryLimit*2+1;i++) if(this.findBuild("user_"+i,builds)==null) return "user_"+i;
     throw "Library is full.";
 };
-// BL1| followed by length-prefixed UTF-8 tokens. Fixed fields; no recursion or executable parser.
+// BL2 adds one integer weight after each Minimum/Ideal pair. BL1 stays readable.
 ::BroLedger.encodeBuilds <- function(builds, defs=null)
 {
     if(typeof builds!="array" || builds.len()>this.LibraryLimit) throw "At most 32 builds are supported.";
-    local out="BL1|",seen={};
+    local out="BL2|",seen={};
     local put=function(value){local s=value.tostring();out+=s.len()+":"+s;};
     put(builds.len());
     foreach(b in builds) {
         if(!this.validBuild(b,defs) || b.id in seen) throw "Invalid build, duplicate ID, or illegal perk order.";
         seen[b.id]<-true;put(b.id);put(b.label);
-        foreach(k in this.Stats) {put(k in b.targets ? b.targets[k] : "");put(k in b.preferred ? b.preferred[k] : "");}
+        local weights=this.buildWeights(b);
+        foreach(k in this.Stats) {put(k in b.targets ? b.targets[k] : "");put(k in b.preferred ? b.preferred[k] : "");put(weights[k]);}
         foreach(values in [b.route,b.flex,b.weaponTags,b.playstyleTags]) {put(values.len());foreach(v in values) put(v);}
     }
     if(out.len()>this.ShareLimit) throw "Share text exceeds 48,000 bytes.";
@@ -85,9 +96,9 @@
 // Only explicit import supplies importInfo; saved-library reads remain strict.
 ::BroLedger.decodeBuilds <- function(source, defs=null, importInfo=null)
 {
-    if(typeof source!="string" || source.len()>this.ShareLimit || source.len()<4 || source.slice(0,4)!="BL1|")
-        throw "Unsupported share version or size. Expected BL1 text (up to 48,000 bytes).";
-    local at=4;
+    if(typeof source!="string" || source.len()>this.ShareLimit || source.len()<4 || ["BL1|","BL2|"].find(source.slice(0,4))==null)
+        throw "Unsupported share version or size. Expected BL1 or BL2 text (up to 48,000 bytes).";
+    local at=4,weighted=source.slice(0,4)=="BL2|";
     local integer=function(s,limit) {
         if(s.len()==0 || s.len()>5) throw "Invalid count.";
         local n=0;foreach(c in s) {if(c<48 || c>57) throw "Invalid count.";n=n*10+c-48;if(n>limit) throw "Count exceeds limit.";}return n;
@@ -113,7 +124,13 @@
     local count=integer(take(),this.LibraryLimit),out=[];
     for(local i=0;i<count;i++) {
         local b={id=take(),label=take(),targets={},preferred={},route=[],flex=[],weaponTags=[],playstyleTags=[]};
-        foreach(k in this.Stats) {local m=take(),ideal=take();if(m!="") b.targets[k]<-numeric(m);if(ideal!="") b.preferred[k]<-numeric(ideal);}
+        if(weighted) b.weights<-{};
+        foreach(k in this.Stats) {
+            local m=take(),ideal=take();
+            if(m!="") b.targets[k]<-numeric(m);
+            if(ideal!="") b.preferred[k]<-numeric(ideal);
+            if(weighted) b.weights[k]<-integer(take(),10);
+        }
         foreach(values in [b.route,b.flex,b.weaponTags,b.playstyleTags]) {
             local n=integer(take(),20);for(local j=0;j<n;j++) values.push(take());
         }

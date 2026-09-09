@@ -5,13 +5,13 @@ try
         min=@(a,b) a.tointeger()<b.tointeger()?a.tointeger():b.tointeger(),
         maxf=@(a,b) a>b?a:b, minf=@(a,b) a<b?a:b};
     dofile("scripts/mods/bro_ledger/core.nut");
-    foreach (file in ["library","plan","state","actor","equipment","fit","screen"])
+    foreach (file in ["library","starters","plan","state","actor","equipment","fit","screen"])
         dofile("scripts/mods/bro_ledger/"+file+".nut");
     loadfile("scripts/!mods_preload/mod_bro_ledger.nut");
     loadfile("tests/runtime_audit.nut");
     dofile("tests/fixtures.nut");
     local count=0;
-    foreach (file in ["community","growth","plan","reader","state","screen","audit"])
+    foreach (file in ["weighted","community","growth","plan","reader","state","screen","audit"])
     {
         local cases=dofile("tests/"+file+".nut"), names=[];
         foreach (name, test in cases) names.push(name);

@@ -21,6 +21,7 @@
 .bl-targets .bl-target-met,.bl-target-met { color:#a6d98a; }
 .bl-targets .bl-target-grow,.bl-target-grow,.bl-warning { color:#ffd394; }
 .bl-targets .bl-target-impossible,.bl-target-impossible { color:#ff9b90; }
+.bl-targets .bl-target-ignored { color:#cfbd9f; }
 .bl-flex-text { color:#78c8ff; }
 .bl-tooltip { cursor:help; }
 .bl-bound { font-size:1.6rem;line-height:2rem; }
@@ -55,32 +56,47 @@
 .bl-compare select { min-width:16rem; }
 .bl-compare-columns { position:absolute;left:0;right:0;top:16rem;bottom:0; }
 .bl-build-list { position:absolute;top:0;left:0;bottom:0;width:39%;background:#29241c; }
-.bl-build-details { position:absolute;top:0;right:0;bottom:0;width:59%;padding:1rem;box-sizing:border-box;background:#252019; }
+.bl-build-details { position:absolute;top:0;right:0;bottom:0;width:59%;padding:1rem;box-sizing:border-box;background:#252019;overflow-y:auto; }
 .bl-catalog-body { padding:.5rem; }
 .bl-build-row { position:relative;min-height:4rem;padding:.4rem 9rem .4rem .6rem;font-size:1.6rem;line-height:2rem;border-bottom:1px solid #5a4c36;color:#eedbb8;box-sizing:border-box; }
 .bl-build-row:hover,.bl-build-row:focus { background:#3b3122; }
 .bl-build-row.is-selected { background:#4d3c23;box-shadow:inset .3rem 0 #efd58d; }
 .bl-build-grade { position:absolute;right:.6rem;top:.6rem;font-size:1.6rem;line-height:2rem;color:#efd58d; }
 .bl-build-name { display:block;word-wrap:break-word; }
+.bl-starter-label { display:block;font-size:1.4rem;line-height:1.8rem;color:#cfbd9f; }
+.bl-starter-notice { padding:.8rem;border-left:.2rem solid #9c8357;background:#30281d; }
+.bl-alternatives { border-top:1px solid #746044;margin-top:1.2rem;padding-top:.6rem; }
+.bl-alternatives .bl-button { width:100%;max-width:48rem; }
 .bl-paging { padding:.5rem; }
 .bl-paging .bl-button { display:inline-block;margin-right:.6rem;width:12rem;vertical-align:middle; }
 .bl-paging .bl-line { display:inline-block;width:10rem;vertical-align:middle;margin:0; }
 .bl-name-field { display:block;font-size:1.8rem;height:4rem; }
 .bl-name-field input { width:64rem; }
-.bl-board { position:absolute;top:4.6rem;left:0;right:0;bottom:0; }
-.bl-board-targets { position:absolute;left:0;width:30rem; }
-.bl-board-perks { position:absolute;left:32rem;width:60rem; }
-.bl-board-order { position:absolute;left:94rem;right:0; }
+.bl-editor-body { overflow-y:auto; }
+.bl-board { position:relative;display:table;table-layout:fixed;width:100%;margin-top:1rem; }
+.bl-board-targets,.bl-board-perks,.bl-board-order { display:table-cell;vertical-align:top;box-sizing:border-box; }
+.bl-board-targets { width:40rem;padding-right:1rem; }
+.bl-board-perks { width:62rem;padding:0 1rem; }
+.bl-board-order { padding-left:1rem; }
 .bl-board .bl-heading { margin-top:0; }
 .bl-input-targets td { padding:.5rem .2rem; }
-.bl-input-targets td:first-child { width:49%; }
+.bl-input-targets th:first-child { width:40%; }
+.bl-input-targets th:last-child { width:15%; }
+.bl-input-targets th+th { text-align:center; }
+.bl-input-targets td { vertical-align:middle; }
+.bl-input-targets .bl-ignored td:first-child { color:#cfbd9f; }
 .bl-input-targets input { width:100%;min-width:0; }
 .bl-input-targets { table-layout:fixed; }
 .bl-tag-grid { margin-bottom:1rem; }
-.bl-tag { display:inline-block;width:50%;font-size:1.6rem;line-height:2.7rem;vertical-align:top; }
+.bl-tag { display:inline-block;width:50%;font-size:1.6rem;line-height:3.5rem;vertical-align:top;cursor:pointer;border-radius:.2rem; }
+.bl-tag:hover,.bl-flex-control:hover { background:rgba(239,213,141,.1); }
 .bl-board-perks .bl-tag { width:33.33%; }
 .bl-tag-icon { width:2rem;height:2rem;vertical-align:middle;margin-right:.3rem; }
-.bl-tag input,.bl-perk-actions input { width:1.5rem;height:1.5rem;vertical-align:middle;margin:0 .4rem 0 0; }
+.bl-compare .icheckbox_flat-orange { width:2rem;height:2rem;margin:0 .6rem 0 0;vertical-align:middle;background-image:url('coui://ui/extern/iCheck/skins/flat/orange.png');background-size:17.6rem 2.2rem;background-position:0 0; }
+.bl-compare .icheckbox_flat-orange.checked { background-position:-2.2rem 0; }
+.bl-compare .icheckbox_flat-orange.disabled { background-position:-4.4rem 0; }
+.bl-compare .icheckbox_flat-orange.checked.disabled { background-position:-6.6rem 0; }
+.bl-compare .icheckbox_flat-orange.focus { outline:.2rem solid #efd58d;outline-offset:.2rem; }
 .bl-perk-tree { margin:.5rem 0; }
 .bl-perk-tier { height:6rem;white-space:nowrap;text-align:center;font-size:0; }
 .bl-perk-tier:last-child { height:5rem; }
@@ -90,10 +106,21 @@
 .bl-perk-choice.is-selected::after { border-color:#efd58d;box-shadow:0 0 .3rem #d8a447; }
 .bl-perk-choice:hover { background:rgba(239,213,141,.15); }
 .bl-perk-choice:focus { outline:.2rem solid #eedbb8;outline-offset:.1rem; }
-.bl-edit-perk { position:relative;min-height:4.3rem;padding:.4rem 11rem .4rem 0;box-sizing:border-box;border-bottom:1px solid #514533;font-size:1.6rem;line-height:1.9rem; }
-.bl-perk-actions { position:absolute;right:0;top:.5rem; }
+.bl-edit-perk { position:relative;min-height:6rem;padding:.4rem 0 3.6rem;box-sizing:border-box;border-bottom:1px solid #514533;font-size:1.6rem;line-height:2rem; }
+.bl-perk-actions { position:absolute;left:0;bottom:.4rem;white-space:nowrap; }
 .bl-small { color:#eedbb8;background:#493b28;border:1px solid #9c8357;font-family:'FreeUniversal-Regular';font-size:1.6rem;line-height:2rem;width:3.4rem;height:2.8rem;padding:0;margin-right:.2rem; }
-.bl-perk-actions label { margin-left:.2rem; }
+.bl-small:hover { background:#665132; }
+.bl-small:focus { outline:.2rem solid #efd58d; }
+.bl-small:disabled { color:#a39580;background:#29241c;cursor:default; }
+.bl-flex-control { display:inline-block;padding:.2rem .4rem;margin-left:.6rem;cursor:pointer; }
+@media (max-width:1399px) {
+    .bl-board { display:block; }
+    .bl-board-targets { display:block;width:100%;padding:0 0 1.5rem; }
+    .bl-board-perks { display:inline-block;width:62rem;padding-left:0; }
+    .bl-board-order { display:inline-block;width:32rem; }
+    .bl-input-targets { max-width:60rem; }
+    .bl-board-targets .bl-tag { width:20%; }
+}
 .bl-share-text { display:block;width:100%;height:34rem;margin:1.5rem 0;resize:none; }
 .bl-error { position:absolute;bottom:0;left:2rem;right:2rem;background:#29241c;border:1px solid #ffd394;padding:.6rem;z-index:10; }
 .character-screen .bl-panel.bl-failure { min-height:0; }

@@ -18,7 +18,7 @@ cases.empty_startup_uses_production_actor_library_and_view <- function() {
     foreach(seq,action in ["refresh","evaluate"]) {
         local r=B.command(screen,{action=action,actor=7,seq=seq});
         check(!("error" in r),"initial "+action+" failed: "+("error" in r?r.error:""));
-        check(r.library.len()==0 && r.builds.len()==0 && r.libraryIssue==null && r.plan==null && r.newBuildID=="user_1",
+        check(r.library.len()==0 && r.builds.len()==(action=="evaluate"?10:0) && r.libraryIssue==null && r.plan==null && r.newBuildID=="user_1",
             "empty campaign did not reach creator-ready response");
     }
     check(!flags.has(B.LibraryFlag) && B.actorState(a).revision==0,"initial reads wrote campaign or actor intent");
@@ -30,11 +30,11 @@ cases.empty_startup_uses_production_actor_library_and_view <- function() {
 };
 cases.create_edit_track_delete_disabled_continuity <- function() {
     local f=commandFixture();check(!("error" in f.request("refresh")),"refresh failed");
-    local b=userBuild(),r=f.request("saveBuild",{definition=b,create=true});check(!("error" in r)&&r.builds.len()==1,"creation failed");
+    local b=userBuild(),r=f.request("saveBuild",{definition=b,create=true});check(!("error" in r)&&r.builds.len()==11,"creation failed");
     r=f.request("track",{build=b.id});check(!("error" in r)&&r.plan.label==b.label,"tracking failed");
     local saved=B.copy(B.actorState(f.actor).plan);b.label="Changed";b.preferred.matk=99;
     r=f.request("saveBuild",{definition=b,create=false});check(!("error" in r)&&same(saved,B.actorState(f.actor).plan),"edit changed tracked snapshot");
-    r=f.request("deleteBuild",{build=b.id});check(!("error" in r)&&r.builds.len()==0&&same(saved,B.actorState(f.actor).plan),"delete lost plan");
+    r=f.request("deleteBuild",{build=b.id});check(!("error" in r)&&r.builds.len()==10&&same(saved,B.actorState(f.actor).plan),"delete lost plan");
     check(!f.request("enabled",{enabled=false}).plan.enabled,"disable failed");
     check(f.request("enabled",{enabled=true}).plan.enabled&&same(saved,B.actorState(f.actor).plan),"reenable replaced intent");
 };
@@ -128,5 +128,35 @@ cases.stock_offer_isolation <- function() {
     B.captureOffer(actor,dto);dto.levelUp.hitpointsIncrease=4;
     check(B.actorState(actor).offer.values.hp==2,"held stock payload by reference");
     B.captureOffer(actor,{levelUp=null});check(B.actorState(actor).offer==null,"stale offer retained");
+};
+cases.starters_are_read_only_and_source_selection_is_explicit <- function() {
+    local f=commandFixture(),templates=B.copy(B.StarterBuilds),r=f.request("evaluate");
+    check(r.builds.len()==10 && r.library.len()==0 && !f.flags.has(B.LibraryFlag),"starters seeded campaign storage");
+    foreach(b in templates) check(B.validBuild(b,defs) && b.route.len()==10,"starter route, targets or tags invalid");
+    local starter=templates[0],copy=B.copy(starter);copy.label="Personal shield";copy.weights.mdef=1;
+    r=f.request("saveBuild",{definition=copy,create=true});
+    check(!("error" in r) && r.builds.len()==11,"same-ID personal copy was rejected");
+    r=f.request("track",{build=starter.id,source="starter"});
+    check(!("error" in r) && B.actorState(f.actor).plan.weights.mdef==starter.weights.mdef,"starter selected personal collision");
+    local saved=B.copy(B.actorState(f.actor).plan),wire=f.flags.get(B.LibraryFlag);
+    check("error" in f.request("deleteBuild",{build=starter.id,source="starter"}),"template deletion accepted");
+    check("error" in f.request("track",{build=starter.id,source="unknown"}),"unknown source accepted");
+    check(f.flags.get(B.LibraryFlag)==wire && same(saved,B.actorState(f.actor).plan),"rejected source action mutated owner");
+    r=f.request("export",{build=starter.id,source="starter"});
+    check(B.decodeBuilds(r.share,defs)[0].weights.mdef==starter.weights.mdef,"starter export used personal collision");
+    r=f.request("track",{build=starter.id,source="library"});check(B.actorState(f.actor).plan.weights.mdef==1,"personal selection used starter collision");
+    f.request("deleteBuild",{build=starter.id});check(same(templates,B.StarterBuilds),"copy/delete edited template definitions");
+    f.flags.set(B.LibraryFlag,"BL99|future");f.request("evaluate");
+    r=f.request("track",{build=starter.id,source="starter"});
+    check(!("error" in r) && f.flags.get(B.LibraryFlag)=="BL99|future","starter required rewriting an unsupported library");
+    B.actorState(f.actor).issue="Future plan";
+    check("error" in f.request("track",{build=starter.id,source="starter"}),"starter overwrote future plan");
+};
+cases.full_library_and_starters_keep_all_matches <- function() {
+    local f=commandFixture(),builds=[];
+    for(local i=0;i<32;i++){local b=userBuild("user_"+i);b.label="Personal "+i;builds.push(b);}
+    B.writeLibrary(f.flags,builds,defs);local r=f.request("evaluate"),seen={};
+    check(r.builds.len()==42 && r.library.len()==32 && r.starters.len()==10,"combined results truncated or capacity changed");
+    foreach(b in r.builds) {local key=b.source+":"+b.id;check(!(key in seen),"source identity collided");seen[key]<-true;}
 };
 return cases;

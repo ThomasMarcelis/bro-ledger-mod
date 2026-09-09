@@ -67,3 +67,13 @@ function oldPlan(build)
         preferredTargets=B.copy(build.preferred), armour=build.armour, swaps=[], options=B.copy(build.swaps),
         weapons=build.weapons, patterns=B.copy(build.patterns)};
 }
+
+function userBuild(id="user_1") {
+    return {id=id,label="TankFighter",weights={hp=1,resolve=1,fatigue=1,initiative=1,matk=1,ratk=1,mdef=1,rdef=1},targets={matk=60,mdef=10},preferred={matk=80,mdef=30},
+        route=["perk.colossus","perk.dodge","perk.gifted"],flex=["perk.gifted"],
+        weaponTags=["Shield","Hammer","Axe","Mace","Flail"],playstyleTags=["Tank","Frontline"]};
+}
+function libraryFlags() {
+    local values={};return {has=@(k) k in values,get=@(k) k in values?values[k]:null,
+        set=function(k,v){values[k]<-v;},remove=function(k){if(k in values) delete values[k];}};
+}

@@ -1,6 +1,6 @@
 # Third-party notices
 
-Bro Ledger's original Squirrel, JavaScript, CSS, tests, and documentation are licensed under [MIT](LICENSE).
+Bro Planner's original Squirrel, JavaScript, CSS, starter templates, tests, and documentation are licensed under [MIT](LICENSE).
 
 Battle Brothers and its assets belong to Overhype Studios. This repository and its release ZIP do not include game binaries, scripts, decompiled source, art, icons, fonts, or saves. Runtime asset paths refer to files in the player's installation.
 
@@ -19,4 +19,4 @@ Local tests use the public [Squirrel](https://github.com/albertodemichelis/squir
 
 ## Strategy provenance
 
-Earlier versions included a tactical catalog derived from the project's original web implementation and researched using the Battle Brothers wiki, Bloodngold's summaries, and community perk guides. That catalog is retired; the current library starts empty and players author their own builds. Those sources' prose, artwork, and code are not redistributed. [Strategy](docs/STRATEGY.md) describes the current evaluator and its limits.
+The ten bundled starter templates are original MIT-licensed definitions of common Battle Brothers archetypes. They are introductory examples, may be suboptimal, and make no claim of endorsement or optimal play. No community guide prose, artwork, or code is redistributed. Runtime perk names, icons, fonts, and checkbox skins come from the player's installation. [Strategy](docs/STRATEGY.md) describes the evaluator and its limits.

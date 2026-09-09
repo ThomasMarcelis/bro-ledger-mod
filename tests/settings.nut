@@ -61,7 +61,7 @@ try
         foreach(seq,action in ["refresh","evaluate"]) {
             local r=screen.onBroLedger({action=action,actor=7,seq=seq});
             check(!("error" in r),"startup "+action+" failed: "+("error" in r ? r.error : ""));
-            check(r.library.len()==0 && r.builds.len()==0 && r.libraryIssue==null && r.plan==null && r.newBuildID=="user_1",
+            check(r.library.len()==0 && r.builds.len()==(action=="evaluate"?10:0) && r.libraryIssue==null && r.plan==null && r.newBuildID=="user_1",
                 "startup did not return the empty editable library");
         }
         check(B.actorState(actor).revision==0,"startup changed actor intent");

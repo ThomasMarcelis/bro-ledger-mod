@@ -5,7 +5,7 @@ const {matches}=require('../ui/mods/bro_ledger/ledger.js');
 const original={SQ:global.SQ,$:global.$,Path:global.Path,document:global.document};
 afterEach(()=>{for(const[k,v]of Object.entries(original)){if(v===undefined)delete global[k];else global[k]=v;}});
 test('empty, one and many libraries expose real matches with ten per page and every remainder reachable',()=>{
-    for(const count of [0,1,10,14,32]){
+    for(const count of [0,1,10,14,32,42]){
         const s=fixture(count),seen=[];
         do {seen.push(...s.byClass('bl-build-row').map(n=>n.attr('data-build')));const next=s.button('Next');if(!next)break;click(next);}while(true);
         assert.equal(seen.length,count);assert.equal(new Set(seen).size,count);assert.deepEqual(s.calls,[]);
@@ -80,7 +80,7 @@ test('failed validation retains editor data and permits correction; stale editor
     const save=s.button('Save build');s.owner.actor=8;click(save);assert.equal(s.calls.length,1);
 });
 test('single/bulk sharing relays inert text, explicit duplicate policy, and selection fallback',()=>{
-    const s=fixture(1);click(s.button('Export all'));assert.equal(s.calls[0].request.build,null);s.reply({share:'BL1|1:0'});
+    const s=fixture(1);click(s.button('Export my builds'));assert.equal(s.calls[0].request.build,null);s.reply({share:'BL1|1:0'});
     assert.equal(s.button('Paste clipboard'),undefined);
     const area=s.byClass('bl-share-text')[0];click(s.button('Select all text'));assert.equal(area.selected,true);assert.equal(area.val(),'BL1|1:0');
     assert.equal(area.prop('readOnly'),true);assert.equal(s.calls.length,1);
@@ -161,7 +161,7 @@ test('editor follows source positions and keeps selected perks through reorder, 
     click(choice('perk.student'));
     click(s.byClass('bl-edit-perk')[2].children[1].children[0]);
     const flex=s.byClass('bl-edit-perk')[1].children[1].children[2].children[0];
-    flex.prop('checked',true).trigger('change');
+    flex.prop('checked',true).trigger('ifChecked');
     click(choice('perk.gifted')); // Removing a selected flex pick also removes its flex intent.
     assert.equal(choice('perk.gifted').attr('aria-pressed'),false);
     assert.equal(choice('perk.student').attr('aria-pressed'),true);
@@ -192,4 +192,50 @@ test('source order wins over names, unlocks and object order; clean-sheet clicks
     assert.deepEqual(s.calls,[]);click(s.button('Save build'));
     assert.equal(s.calls[0].request.create,true);
     assert.deepEqual(s.calls[0].request.definition.route,ids.filter((_,i)=>i!==5));
+});
+
+test('weights retain ignored ranges, validate at the backend, and native checkbox events relay tags',()=>{
+    const s=fixture(1),before=JSON.stringify(s.data.library);s.owner.editor(s.data,s.data.library[0]);
+    const field=name=>s.all().find(n=>n.attr('aria-label')===name);
+    field('HP Weight').val('0').trigger('input');field('Melee skill Weight').val('3');
+    const tag=s.byClass('bl-tag').find(n=>n.children.some(c=>c.value==='Bow'));
+    tag.children[0].prop('checked',true).trigger('ifChecked');
+    const stale=s.byClass('bl-edit-perk')[1].children[1].children[2].children[0];
+    click(s.byClass('bl-edit-perk')[1].children[1].children[0]);
+    stale.prop('checked',false).trigger('ifUnchecked');
+    click(s.button('Save build'));
+    const b=s.calls[0].request.definition;
+    assert.equal(b.weights.hp,0);assert.equal(b.weights.matk,3);assert.equal(b.targets.hp,60);assert.equal(b.preferred.hp,80);
+    assert.ok(b.weaponTags.includes('Bow'));assert.ok(b.flex.includes('perk.gifted'));assert.equal(JSON.stringify(s.data.library),before);
+    s.reply({error:'Invalid weights'});field('HP Weight').val('1.5');click(s.button('Save build'));
+    assert.equal(s.calls.at(-1).request.definition.weights.hp,'1.5');
+});
+
+test('starter source filtering, tracking and unsaved copying never modify a template',()=>{
+    const s=fixture(1),template=JSON.parse(JSON.stringify(s.data.library[0]));
+    template.label='Starter example';s.data.starters=[template];
+    s.data.builds.push({...s.data.builds[0],source:'starter',label:template.label});
+    s.owner.compare(s.data);const before=JSON.stringify(s.data.starters);
+    click(s.button('Source: All'));click(s.button('Starters'));
+    assert.equal(s.byClass('bl-build-row').length,1);click(s.byClass('bl-build-row')[0]);
+    assert.equal(s.button('Delete'),undefined);
+    click(s.button('Track build'));assert.equal(s.calls[0].request.source,'starter');
+    s.reply();s.owner.compare(s.owner.data);
+    click(s.byClass('bl-build-row')[1]);click(s.button('Copy &amp; edit'));
+    assert.equal(s.calls.length,1,'copy opening persisted a draft');
+    click(s.button('Save build'));
+    const r=s.calls.at(-1).request;assert.equal(r.create,true);assert.equal(r.definition.id,s.data.newBuildID);
+    assert.equal(r.definition.label,template.label);assert.equal(JSON.stringify(s.data.starters),before);
+    s.reply({error:'Library full'});assert.ok(s.button('Save build'),'failed copy discarded editor');
+    click(s.button('Cancel'));assert.equal(s.calls.at(-1).request.action,'evaluate');
+    assert.equal(JSON.stringify(s.data.starters),before);
+});
+
+test('legacy alternatives relay the saved option and stale dialogs cannot replace perks',()=>{
+    const option={index:0,replace:'perk.colossus',with:'perk.gifted',active:false,condition:'A different future pick.'};
+    const s=fixture(0,{label:'Saved',enabled:true,options:[option]});
+    const action=s.button('Replace Colossus with Gifted');click(action);
+    assert.equal(s.calls[0].request.action,'replace');assert.equal(s.calls[0].request.index,0);
+    assert.equal(s.calls[0].request.replace,option.replace);assert.equal(s.calls[0].request.with,option.with);
+    s.reply();click(action);assert.equal(s.calls.length,1);
 });

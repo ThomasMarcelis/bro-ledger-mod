@@ -3,7 +3,7 @@
 ::BroLedger.Hooks.require("mod_msu >= 1.9.0", "mod_modern_hooks >= 0.6.0");
 ::BroLedger.Hooks.queue(">mod_msu", function() {
     ::BroLedger.Mod <- ::MSU.Class.Mod(::BroLedger.ID, ::BroLedger.Version, ::BroLedger.Name);
-    foreach (file in ["library", "plan", "state", "actor", "equipment", "fit", "screen"])
+    foreach (file in ["library","starters", "plan", "state", "actor", "equipment", "fit", "screen"])
         ::include("scripts/mods/bro_ledger/" + file);
     ::BroLedger.registerSettings();
     ::BroLedger.registerTooltips();

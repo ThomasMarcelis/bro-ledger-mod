@@ -20,11 +20,21 @@ var BroLedgerUI = (function () {
     function tooltip(node, id) {
         node.addClass('bl-tooltip').bindTooltip({contentType: 'msu-generic', modId: 'mod_bro_ledger', elementId: id});
     }
+    function checkbox(label, checked, change) {
+        var input = $('<input type="checkbox" class="bl-checkbox"/>').prop('checked', checked).prependTo(label);
+        input.iCheck({checkboxClass: 'icheckbox_flat-orange', increaseArea: '0%'});
+        input.on('ifChecked ifUnchecked', function () { change(input.prop('checked')); });
+        return input;
+    }
+    function disposeCheckboxes(parent) {
+        parent.find('.bl-checkbox').each(function () { $(this).iCheck('destroy'); });
+    }
     function disposeTooltips(parent) {
         // Native unbind alone leaves a delayed hover tooltip pending.
         parent.find('.bl-tooltip').each(function () { $(this).trigger('hide-tooltip').unbindTooltip(); });
     }
     function disposeLists(parent) {
+        disposeCheckboxes(parent);
         disposeTooltips(parent);
         parent.find('.bl-scroll').each(function () { $(this).destroyList(); });
     }
@@ -116,14 +126,15 @@ var BroLedgerUI = (function () {
     };
     function valueLabel(value) { return value == null ? '?' : String(Number(value.toFixed(2))); }
     function scoreLabel(build) { return build.score == null ? 'Unrated' : valueLabel(build.score) + '/100'; }
-    function matches(build, weapon, style) {
+    function matches(build, weapon, style, source) {
         return (weapon === 'All' || build.weaponTags.indexOf(weapon) !== -1) &&
-            (style === 'All' || build.playstyleTags.indexOf(style) !== -1);
+            (style === 'All' || build.playstyleTags.indexOf(style) !== -1) &&
+            (!source || source === 'All' || (source === 'Starters' ? build.source === 'starter' : build.source !== 'starter'));
     }
     Controller.prototype.targets = function (parent, build, stars, compact) {
         var table = $('<table class="bl-targets"/>').appendTo(parent);
         var header = $('<tr/>').appendTo($('<thead/>').appendTo(table));
-        (compact ? ['Stat', 'Current', 'Ideal'] : ['Stat', 'Current', 'Potential', 'Min', 'Ideal']).forEach(function (label) {
+        (compact ? ['Stat', 'Current', 'Ideal'] : ['Stat', 'Current', 'Potential', 'Min', 'Ideal', 'Weight']).forEach(function (label) {
             $('<th/>').text(label).appendTo(header);
         });
         var body = $('<tbody/>').appendTo(table), short = {hp:'HP',resolve:'Res',fatigue:'Fat',initiative:'Init',matk:'MAtk',ratk:'RAtk',mdef:'MDef',rdef:'RDef'};
@@ -135,11 +146,13 @@ var BroLedgerUI = (function () {
                 tooltip($('<td/>').text(valueLabel(row.expected)).appendTo(tr), 'expected');
                 $('<td/>').text(row.minimum == null ? '—' : valueLabel(row.minimum)).appendTo(tr);
             }
-            tooltip($('<td/>').text(row.ideal == null ? '—' : valueLabel(row.ideal)).addClass('bl-target-' + row.idealState).appendTo(tr), 'targets');
+            tooltip($('<td/>').text(row.idealState === 'ignored' ? 'Ignored' : row.ideal == null ? '—' : valueLabel(row.ideal)).addClass('bl-target-' + row.idealState).appendTo(tr), 'targets');
+            if (!compact) $('<td/>').text(row.minimum == null ? '—' : row.weight).appendTo(tr);
         });
         var joint = build.jointState === 'impossible' ? 'Goals compete: no joint maximum-roll allocation.' :
             build.jointState === 'individual' ? 'Red goals exceed individual maximum rolls.' :
-            build.jointState === 'unknown' ? 'Growth or saved Ideal goals unknown.' : 'Goals share limited picks; actual rolls matter.';
+            build.jointState === 'unknown' ? 'Growth or saved Ideal goals unknown.' :
+            build.jointState === 'untargeted' ? 'No weighted attribute goals.' : 'Goals share limited picks; actual rolls matter.';
         text(parent, 'To L' + build.projection.horizon + ': ' + joint).addClass('bl-bound');
     };
     Controller.prototype.perkOrder = function (parent, plan, defs, compact) {
@@ -199,15 +212,15 @@ var BroLedgerUI = (function () {
     };
     Controller.prototype.compare = function (data) {
         if (!data.settings.Enabled) return;
-        var self = this, popup = this.dialog(data.title), selected = null, weapon = 'All', style = 'All', page = 0;
+        var self = this, popup = this.dialog(data.title), selected = null, weapon = 'All', style = 'All', source = 'All', page = 0;
         var body = $('<div class="bl-compare-body"/>').appendTo(popup.findPopupDialogContentContainer());
         var context = $('<div class="bl-compare-context"/>').appendTo(body);
-        text(context, data.name + ' · Campaign build library', true);
-        tooltip(text(context, 'Potential: fit to creator targets. 50 = Minimum · 100 = Ideal'), 'potential');
+        text(context, data.name + ' · Builds and starter templates', true);
+        tooltip(text(context, 'Potential: weighted target fit using one shared allocation.'), 'potential');
         var tools = $('<div class="bl-toolbar"/>').appendTo(context);
         button(tools, 'Create build', function () { if (self.current(data,popup)) self.editor(data,null); });
         button(tools, 'Import', function () { if (self.current(data,popup)) self.share(data,null); });
-        button(tools, 'Export all', function () {
+        button(tools, 'Export my builds', function () {
             if (self.current(data,popup)) self.request('export',{build:null},function (reply) { self.share(reply,reply.share); });
         });
         var filters = $('<div class="bl-filters"/>').appendTo(context), chooser = null, filterButton = null;
@@ -240,59 +253,70 @@ var BroLedgerUI = (function () {
             }).attr('aria-expanded',false);
         }
         filter('Weapon',data.weaponTags,function (v) {weapon=v;}); filter('Playstyle',data.playstyleTags,function (v) {style=v;});
+        filter('Source',['My builds','Starters'],function (v) {source=v;});
         var columns = $('<div class="bl-compare-columns"/>').appendTo(body);
         var catalog = $('<div class="bl-build-list"/>').appendTo(columns);
         var list = $('<div class="bl-catalog-body"/>').appendTo(catalog);
         var paging = $('<div class="bl-paging"/>').appendTo(catalog);
         var details = $('<div class="bl-build-details bl-detail-content"/>').appendTo(columns);
         function preview(build) {
-            if (!self.current(data,popup) || !matches(build,weapon,style)) return;
+            if (!self.current(data,popup) || !matches(build,weapon,style,source)) return;
             selected=build; disposeTooltips(details); details.empty();
-            list.find('.bl-build-row').removeClass('is-selected').filter(function () {return $(this).attr('data-build')===build.id;}).addClass('is-selected');
+            list.find('.bl-build-row').removeClass('is-selected').filter(function () {return $(this).attr('data-build')===build.id && $(this).attr('data-source')===build.source;}).addClass('is-selected');
             text(details,build.label + ' · ' + scoreLabel(build),true);
+            if(build.source==='starter') text(details,'Starter builds are original examples of common community archetypes. They may be suboptimal; use them as starting guides and adjust them to your brothers and playstyle.').addClass('bl-starter-notice');
             self.targets(details,build,data.stars,false); self.perkOrder(details,build,data.defs,false);
             var actions=$('<div class="bl-toolbar"/>').appendTo(details);
-            button(actions,'Edit',function () {
-                if (self.current(data,popup)) self.editor(data,data.library.filter(function (b) {return b.id===build.id;})[0]);
+            button(actions,build.source==='starter'?'Copy & edit':'Edit',function () {
+                if (self.current(data,popup) && !data.libraryIssue) self.editor(data,(build.source==='starter'?data.starters:data.library).filter(function (b) {return b.id===build.id;})[0],build.source==='starter');
             });
-            button(actions,'Export',function () { if (self.current(data,popup)) self.request('export',{build:build.id},function (reply) {self.share(reply,reply.share);}); });
-            button(actions,'Delete',function () {
+            button(actions,'Export',function () { if (self.current(data,popup)) self.request('export',{build:build.id,source:build.source},function (reply) {self.share(reply,reply.share);}); });
+            if(build.source!=='starter') button(actions,'Delete',function () {
                 if (!self.current(data,popup)) return;
                 actions.empty();text(actions,'Remove from library? Tracked plans keep their snapshots.');
                 button(actions,'Delete build',function () {if(self.current(data,popup)) self.request('deleteBuild',{build:build.id},function (reply) {self.compare(reply);});});
                 button(actions,'Keep',function () {preview(build);});
             });
-            popup.findPopupDialogOkButton().enableButton(!data.issue && !data.libraryIssue);
+            popup.findPopupDialogOkButton().enableButton(!data.issue && (!data.libraryIssue || build.source==='starter') && build.route.unknown.length===0);
         }
         function draw() {
             closeChooser();
             disposeTooltips(list); list.empty(); paging.empty(); disposeTooltips(details); details.empty();
-            var filtered=data.builds.filter(function (b) {return matches(b,weapon,style);});
+            var filtered=data.builds.filter(function (b) {return matches(b,weapon,style,source);});
             filtered.slice(page*10,page*10+10).forEach(function (build) {
-                var row=$('<div class="bl-build-row text-font-normal" role="button" tabindex="0"/>').attr('data-build',build.id).appendTo(list);
+                var row=$('<div class="bl-build-row text-font-normal" role="button" tabindex="0"/>').attr('data-build',build.id).attr('data-source',build.source).appendTo(list);
                 $('<span class="bl-build-grade"/>').text(scoreLabel(build)).appendTo(row);
                 $('<span class="bl-build-name"/>').text(build.label).appendTo(row);
+                if(build.source==='starter') $('<span class="bl-starter-label"/>').text('Starter').appendTo(row);
                 row.on('click',function () {preview(build);}).on('keydown',function(e){if(e.which===13||e.which===32){e.preventDefault();preview(build);}});
             });
             text(paging,filtered.length ? (page*10+1)+'–'+Math.min(page*10+10,filtered.length)+' of '+filtered.length : '0 matches');
             if(page>0) button(paging,'Previous',function(){if(self.current(data,popup)){page--;selected=null;draw();}});
             if((page+1)*10<filtered.length) button(paging,'Next',function(){if(self.current(data,popup)){page++;selected=null;draw();}});
             text(details,data.libraryIssue || (data.builds.length===0 ? 'Your library is empty. Create a build or import share text.' :
-                filtered.length ? 'Select a build to inspect its targets and perk order.' : 'No builds match both filters.'));
+                filtered.length ? 'Select a build to inspect its targets and perk order.' : 'No builds match these filters.'));
             if(data.issue) text(details,data.issue).addClass('bl-warning');
+            if(data.starters && data.starters.length) text(details,'Starter templates are starting guides and may be suboptimal. Select one to inspect it, track it, or copy it into your library.').addClass('bl-starter-notice');
             if(data.plan) text(details,(data.plan.enabled?'Tracking: ':'Disabled plan: ')+data.plan.label);
             // Legacy replacements stay deliberate and reachable from Change build, outside the compact panel.
-            if(data.plan && data.plan.options) data.plan.options.forEach(function(option){
-                button(details,(option.active?'Restore ':'Use ')+perkName(option.active?option.replace:option.with,data.defs),function(){
+            if(data.plan && data.plan.options && data.plan.options.length) {
+                var alternatives=$('<div class="bl-alternatives"/>').appendTo(details);
+                text(alternatives,'Saved perk alternatives',true);
+                text(alternatives,'Change a future pick in this saved plan. This does not learn or refund a perk.');
+                data.plan.options.forEach(function(option){
+                var from=perkName(option.active?option.with:option.replace,data.defs),to=perkName(option.active?option.replace:option.with,data.defs);
+                text(alternatives,'Planned: '+from+'. '+option.condition);
+                button(alternatives,'Replace '+from+' with '+to,function(){
                     if(self.current(data,popup)) self.request('replace',option,function(reply){self.closeCompare();});
                 });
-            });
+                });
+            }
             popup.findPopupDialogOkButton().enableButton(false);
         }
         popup.addPopupDialogCancelButton(function(){if(self.popup===popup)self.closeCompare();});
         popup.addPopupDialogButton(data.plan?'Change build':'Track build','l-ok-button',function(){
-            if(self.current(data,popup)&&selected&&matches(selected,weapon,style)&&!data.issue) {
-                self.request('track',{build:selected.id},function(){self.closeCompare();});
+            if(self.current(data,popup)&&selected&&matches(selected,weapon,style,source)&&!data.issue && (!data.libraryIssue || selected.source==='starter') && selected.route.unknown.length===0) {
+                self.request('track',{build:selected.id,source:selected.source},function(){self.closeCompare();});
             }
         },true);
         if(data.plan&&!data.plan.enabled&&!data.issue) {
@@ -302,46 +326,60 @@ var BroLedgerUI = (function () {
         }
         draw();
     };
-    Controller.prototype.editor = function (data, original) {
-        var self=this, popup=this.dialog(original?'Edit build':'Create build');popup.addClass('bl-editor');
+    Controller.prototype.editor = function (data, original, copy) {
+        var self=this, popup=this.dialog(copy?'Copy starter':original?'Edit build':'Create build');popup.addClass('bl-editor');
         var b=original?JSON.parse(JSON.stringify(original)):{id:data.newBuildID,label:'',targets:{},preferred:{},route:[],flex:[],weaponTags:[],playstyleTags:[]};
+        if(copy)b.id=data.newBuildID;
+        if(!b.weights)b.weights={};
         var body=$('<div class="bl-editor-body"/>').appendTo(popup.findPopupDialogContentContainer());
         var title=$('<label class="bl-name-field text-font-normal"/>').text('Build name ').appendTo(body);
         var name=$('<input type="text" maxlength="40"/>').val(b.label).appendTo(title);
         var board=$('<div class="bl-board"/>').appendTo(body),left=$('<div class="bl-board-targets"/>').appendTo(board);
         var middle=$('<div class="bl-board-perks"/>').appendTo(board),right=$('<div class="bl-board-order"/>').appendTo(board);
-        text(left,'Minimum / Ideal',true);text(left,'Blank pair = untargeted. 0–500, two decimals.');
+        text(left,'Attributes Ranges',true);text(left,'Ranges: 0–500, two decimals. Blank pair = ignored.');
+        text(left,'Weight 0–10: 0 ignores; 2 = twice 1.');
         var targetTable=$('<table class="bl-targets bl-input-targets"/>').appendTo(left),inputs={};
+        var targetHead=$('<tr/>').appendTo($('<thead/>').appendTo(targetTable));
+        ['Attribute','Minimum','Ideal','Weight'].forEach(function(label){$('<th/>').text(label).appendTo(targetHead);});
+        var targetBody=$('<tbody/>').appendTo(targetTable);
         Object.keys(names).forEach(function(k){
-            var row=$('<tr/>').appendTo(targetTable);$('<td/>').text(names[k]).appendTo(row);inputs[k]=[];
+            var row=$('<tr/>').appendTo(targetBody),label=$('<td/>').text(names[k]).appendTo(row);inputs[k]=[];
             ['targets','preferred'].forEach(function(field){inputs[k].push($('<input type="text" inputmode="decimal"/>').attr('aria-label',names[k]+' '+(field==='targets'?'Minimum':'Ideal'))
                 .val(b[field][k]===undefined?'':b[field][k]).appendTo($('<td/>').appendTo(row)));});
+            var weight=$('<input type="text" inputmode="numeric" maxlength="2"/>').attr('aria-label',names[k]+' Weight')
+                .val(b.weights[k]===undefined?1:b.weights[k]).appendTo($('<td/>').appendTo(row));inputs[k].push(weight);
+            function ignored(){var off=weight.val().trim()==='0'||(inputs[k][0].val().trim()===''&&inputs[k][1].val().trim()==='');
+                row.toggleClass('bl-ignored',off);label.text(names[k]+(off?' · Ignored':''));}
+            inputs[k].forEach(function(input){input.on('input change',ignored);});ignored();
         });
         function tags(parent,label,values,key){
             text(parent,label,true);var grid=$('<div class="bl-tag-grid"/>').appendTo(parent);
             values.forEach(function(tag){var node=$('<label class="bl-tag text-font-normal"/>').appendTo(grid);
-                var input=$('<input type="checkbox"/>').prop('checked',b[key].indexOf(tag)!==-1).appendTo(node);
                 if(data.tagIcons && data.tagIcons[tag])$('<img class="bl-tag-icon"/>').attr('src',Path.GFX+data.tagIcons[tag]).attr('alt','').appendTo(node);
                 $('<span/>').text(tag).appendTo(node);
-                input.on('change',function(){var at=b[key].indexOf(tag);if(input.prop('checked')&&at===-1)b[key].push(tag);else if(!input.prop('checked')&&at!==-1)b[key].splice(at,1);});
+                checkbox(node,b[key].indexOf(tag)!==-1,function(checked){if(!self.current(data,popup))return;
+                    var at=b[key].indexOf(tag);if(checked&&at===-1)b[key].push(tag);else if(!checked&&at!==-1)b[key].splice(at,1);});
             });
         }
         tags(left,'Playstyle',data.playstyleTags,'playstyleTags');
         text(middle,'Perks · click to add / remove',true);
         var tree=$('<div class="bl-perk-tree"/>').appendTo(middle),order=$('<div class="bl-edit-route"/>').appendTo(right);
         function tiny(parent,label,title,action){return $('<button type="button" class="bl-small"/>').text(label).attr('title',title).on('click',action).appendTo(parent);}
+        var routeVersion=0;
         function drawRoute(){
-            order.empty();text(order,'Creator order · F = flex',true);
-            text(order,b.route.length+' picks · unchecked F = mandatory');
+            var version=++routeVersion;disposeCheckboxes(order);order.empty();text(order,'Perk order',true);
+            text(order,b.route.length+' picks · unchecked = mandatory');
+            text(order,'A flexible pick can yield to an off-route perk you learn manually.');
             b.route.forEach(function(id,i){
                 var row=$('<div class="bl-edit-perk text-font-normal"/>').appendTo(order);
                 $('<span/>').text((i+1)+'. '+perkName(id,data.defs)).appendTo(row);
                 var actions=$('<div class="bl-perk-actions"/>').appendTo(row);
-                tiny(actions,'Up','Move earlier',function(){if(i>0){b.route.splice(i-1,0,b.route.splice(i,1)[0]);drawRoute();}});
-                tiny(actions,'Dn','Move later',function(){if(i<b.route.length-1){b.route.splice(i+1,0,b.route.splice(i,1)[0]);drawRoute();}});
-                var label=$('<label/>').text('F').appendTo(actions),flex=$('<input type="checkbox"/>').prop('checked',b.flex.indexOf(id)!==-1).prependTo(label);
-                flex.on('change',function(){var at=b.flex.indexOf(id);if(flex.prop('checked')&&at===-1)b.flex.push(id);else if(!flex.prop('checked')&&at!==-1)b.flex.splice(at,1);});
-                if(data.defs[id].unlock>i)row.addClass('bl-target-impossible').attr('title','Requires '+data.defs[id].unlock+' earlier picks. Reorder or add earlier-tier perks.');
+                tiny(actions,'Up','Move earlier',function(){if(self.current(data,popup)&&version===routeVersion&&i>0){b.route.splice(i-1,0,b.route.splice(i,1)[0]);drawRoute();}}).prop('disabled',i===0);
+                tiny(actions,'Dn','Move later',function(){if(self.current(data,popup)&&version===routeVersion&&i<b.route.length-1){b.route.splice(i+1,0,b.route.splice(i,1)[0]);drawRoute();}}).prop('disabled',i===b.route.length-1);
+                var label=$('<label class="bl-flex-control"/>').appendTo(actions);$('<span/>').text('Flexible').appendTo(label);
+                checkbox(label,b.flex.indexOf(id)!==-1,function(checked){if(!self.current(data,popup)||version!==routeVersion)return;
+                    var at=b.flex.indexOf(id);if(checked&&at===-1)b.flex.push(id);else if(!checked&&at!==-1)b.flex.splice(at,1);});
+                if(!data.defs[id]||data.defs[id].unlock>i)row.addClass('bl-target-impossible').attr('title',!data.defs[id]?'Perk unavailable.':'Requires '+data.defs[id].unlock+' earlier picks. Reorder or add earlier-tier perks.');
             });
             tree.find('.bl-perk-choice').each(function(){
                 var selected=b.route.indexOf($(this).attr('data-perk'))!==-1;
@@ -354,7 +392,7 @@ var BroLedgerUI = (function () {
             if(tier!==def.row){tier=def.row;treeRow=$('<div class="bl-perk-tier"/>').appendTo(tree);}
             var node=$('<button type="button" class="bl-perk-choice"/>').attr('data-perk',id).attr('title',def.name+' · '+def.unlock+' earlier picks').attr('aria-label',def.name).appendTo(treeRow);
             if(def.icon)$('<img/>').attr('src',Path.GFX+def.icon).attr('alt',def.name).appendTo(node);else node.text(def.name);
-            node.on('click',function(){var at=b.route.indexOf(id);if(at===-1){if(b.route.length>=11){self.showError('At most 11 picks, including Student. Remove a perk first.');return;}b.route.push(id);}else{b.route.splice(at,1);at=b.flex.indexOf(id);if(at!==-1)b.flex.splice(at,1);}drawRoute();});
+            node.on('click',function(){if(!self.current(data,popup))return;var at=b.route.indexOf(id);if(at===-1){if(b.route.length>=11){self.showError('At most 11 picks, including Student. Remove a perk first.');return;}b.route.push(id);}else{b.route.splice(at,1);at=b.flex.indexOf(id);if(at!==-1)b.flex.splice(at,1);}drawRoute();});
         });
         tags(middle,'Weapon / equipment',data.weaponTags,'weaponTags');drawRoute();
         popup.addPopupDialogCancelButton(function(){if(self.popup===popup)self.evaluate();});
@@ -362,14 +400,14 @@ var BroLedgerUI = (function () {
             if(!self.current(data,popup))return;b.label=name.val();b.targets={};b.preferred={};
             Object.keys(inputs).forEach(function(k){var values=inputs[k];['targets','preferred'].forEach(function(field,i){
                 var value=values[i].val().trim();if(value!=='')b[field][k]=/^\d+(\.\d{1,2})?$/.test(value)?Number(value):value;
-            });});
-            self.request('saveBuild',{definition:b,create:!original},function(reply){self.compare(reply);});
+            });var weight=values[2].val().trim();b.weights[k]=/^\d+$/.test(weight)?Number(weight):weight;});
+            self.request('saveBuild',{definition:b,create:!original||!!copy},function(reply){self.compare(reply);});
         });
     };
     Controller.prototype.share = function(data, exported){
         var self=this,popup=this.dialog(exported===null?'Import builds':'Export builds');popup.addClass('bl-sharing');
         var body=$('<div class="bl-share-body"/>').appendTo(popup.findPopupDialogContentContainer());
-        text(body,exported===null?'Paste a single or bulk BL1 string. Imports apply together.':'Select text, then Ctrl+C. Paste into another campaign or share with a player.',true);
+        text(body,exported===null?'Paste a single or bulk BL1 or BL2 string. Imports apply together.':'Select text, then Ctrl+C. Paste into another campaign or share with a player.',true);
         text(body,'Library belongs to this campaign; save the campaign to retain edits. Tracked snapshots stay independent.');
         var area=$('<textarea class="bl-share-text" spellcheck="false" maxlength="48000"/>').attr('aria-label','Build share text').val(exported||'').prop('readOnly',exported!==null).appendTo(body);
         if(exported===null)button(body,'Paste clipboard',function(){
@@ -433,7 +471,7 @@ var BroLedgerUI = (function () {
         source.broLedger = owner;
         owner.panel = $('<div class="bl-panel"/>').hide().appendTo(this.mCharacterScreen);
         owner.entry = $('<div class="bl-entry"/>').hide().appendTo(this.mCharacterPanelModule.mCharacterPanelHeaderModule.mContainer);
-        owner.entry.createTextButton('Evaluate', function () { owner.evaluate(); }, '', 1);
+        owner.entry.createTextButton('Bro Planner', function () { owner.evaluate(); }, '', 1);
         owner.selected = function () { owner.select(); };
         owner.updated = function (ds, bro) {
             if (bro && bro.id === owner.actor) {

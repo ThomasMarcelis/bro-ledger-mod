@@ -22,7 +22,8 @@ function fixture(count=14, plan=null, issue=null) {
         hide(){this.hidden=true;return this;}
         show(){this.hidden=false;return this;}
         toggle(v){this.hidden=!v;return this;}
-        on(e,fn){this.handlers[e]=fn;return this;}
+        on(e,fn){e.split(' ').forEach(name=>this.handlers[name]=fn);return this;}
+        iCheck(action){if(action==='destroy'){this.destroyed=true;return this;}this.skinned=true;return this;}
         find(selector){const out=[];const visit=n=>n.children.forEach(c=>{if(c.classes.has(selector.slice(1)))out.push(c);visit(c);});visit(this);return collection(out);}
         trigger(e){if(e==='hide-tooltip')this.pendingTooltip=false;if(this.handlers[e])this.handlers[e]({});return this;}
         bindTooltip(data){this.tooltip=data;this.pendingTooltip=true;return this;}
@@ -49,9 +50,9 @@ function fixture(count=14, plan=null, issue=null) {
         weaponTags:['Shield','Hammer','Axe','Mace','Flail'],playstyleTags:['Tank','Frontline']});
     const data={actor:7,epoch:42,revision:0,title:'Planner',name:'Brother',settings:{Enabled:true},plan,issue,libraryIssue:null,
         defs:{'perk.colossus':{name:'Colossus',unlock:0,row:0,column:0},'perk.gifted':{name:'Gifted',unlock:1,row:1,column:0},'perk.student':{name:'Student',unlock:0,row:0,column:1}},
-        library:Array.from({length:count},(_,i)=>build(i+1)),newBuildID:'user_33',weaponTags:['Shield','Hammer','Axe','Mace','Flail','Bow'],playstyleTags:['Tank','Frontline','Ranged'],
+        starters:[],library:Array.from({length:count},(_,i)=>build(i+1)),newBuildID:'user_33',weaponTags:['Shield','Hammer','Axe','Mace','Flail','Bow'],playstyleTags:['Tank','Frontline','Ranged'],
         stars:{},builds:[]};
-    data.builds=data.library.map((b,i)=>({...b,score:100-i,order:b.route,projection:{horizon:11},jointState:'possible',statRows:[],
+    data.builds=data.library.map((b,i)=>({...b,source:'library',score:100-i,order:b.route,projection:{horizon:11},jointState:'possible',statRows:[],
         route:{remaining:b.route,acquired:[],blocked:[],offplan:[],unknown:[],conflicts:[],feasible:true}}));
     owner.data=data;owner.compare(data);
     function all(){const out=[];const visit=n=>{out.push(n);n.children.forEach(visit);};visit(owner.popup);return out;}

@@ -5,11 +5,11 @@
     local page = this.Mod.ModSettings.addPage("General", this.Name);
     local timing = " Close and reopen the character sheet to apply.";
     page.addBooleanSetting("Enabled", true, "Enable planner",
-        "Show Evaluate and saved-plan guidance. Turning this off retains every brother's plan." + timing);
+        "Show Bro Planner and saved-plan guidance. Turning this off retains every brother's plan." + timing);
     page.addBooleanSetting("PerkHighlights", true, "Perk highlights",
         "Show green route and blue flexible-perk marks. Perk choices stay manual." + timing);
     page.addBooleanSetting("LevelUpRecommendations", true, "Level-up recommendations",
-        "Suggest three attributes from the actual offered rolls. Spend points yourself." + timing);
+        "Suggest weighted attributes from the actual offered rolls. Fill other choices and spend points yourself." + timing);
 
 };
 
@@ -17,7 +17,7 @@
 {
     local tips = {
         stats = ["Underlying stats", "Permanent stats before equipment, Colossus, Fortified Mind and Dodge. Lasting traits and injuries count."],
-        potential = ["Potential target fit", "Best weakest-target satisfaction in one finite allocation at average rolls. Minimum = 50; Ideal = 100. Equal Minimum and Ideal use one 0–100 ramp. Excess stats never compensate. This is target fit, not combat strength or win probability."],
+        potential = ["Weighted Potential", "Best weighted average of attribute satisfaction in one legal allocation at average rolls. Each attribute scores 50 at Minimum and 100 at Ideal; equal Minimum/Ideal use one 0–100 ramp. Weight 2 counts twice as much as 1; 0 ignores. Surplus above Ideal does not count. An overall 50 does not mean every Minimum is met. This measures target fit, not combat strength."],
         expected = ["Shared forecast", "All eight projected stats share three selections per remaining level. Average rolls are assumptions, not revealed future rolls. Red requires a maximum-roll bound within this horizon."],
         targets = ["Ideal progress", "Green: already met. Yellow: needs development. Red: impossible even with every remaining row invested here at maximum rolls, within the displayed level horizon. Joint shortfalls are shown separately."],
         dodge = ["Dodge defence", "Current bonus to both melee and ranged defence: 15% of current Initiative. Equipment and accumulated fatigue affect it."],
@@ -51,8 +51,9 @@
     if(library==null) library=this.readLibrary(::World.Flags,defs);
     local out={actor=actor.getID(),name=actor.getName(),revision=state.revision,issue=state.issue,plan=null,
         stars=this.copy(snapshot.stars),notes=snapshot.notes,warnings=snapshot.warnings,defs=defs,builds=[],offer=null,
-        libraryIssue=library.issue,library=library.builds,tagIcons=this.tagIcons(defs),weaponTags=this.WeaponTags,playstyleTags=this.PlaystyleTags};
-    if(catalog) out.builds=this.compare(snapshot,defs,library.builds).builds;
+        libraryIssue=library.issue,library=library.builds,starters=catalog ? this.StarterBuilds : [],
+        tagIcons=this.tagIcons(defs),weaponTags=this.WeaponTags,playstyleTags=this.PlaystyleTags};
+    if(catalog) out.builds=this.compare(snapshot,defs,library.builds,this.StarterBuilds).builds;
     if(state.issue!=null || state.plan==null) return out;
     local saved=state.plan;
     out.plan={build=saved.build,label=saved.label,enabled=saved.enabled,legacy=saved.schema<4};
@@ -101,11 +102,14 @@
                 data.actor!=context.actor || data.revision!=state.revision || !("libraryToken" in context) || context.libraryToken!=library.token)
                 throw "Plan or library changed; refresh before choosing.";
         }
+        local source="source" in data ? data.source : "library";
+        if(["library","starter"].find(source)==null) throw "Unknown build source.";
+        if(source=="starter" && ["track","export"].find(data.action)==null) throw "Starter templates are read-only. Copy and edit one in your library.";
         if(["track","replace","enabled"].find(data.action)!=null && state.issue!=null) throw state.issue;
-        if(["saveBuild","deleteBuild","import","export","track"].find(data.action)!=null && library.issue!=null) throw library.issue;
+        if(["saveBuild","deleteBuild","import","export","track"].find(data.action)!=null && source=="library" && library.issue!=null) throw library.issue;
         if(data.action=="saveBuild") {
             if(!("definition" in data) || !this.validBuild(data.definition,defs) || !("create" in data) || typeof data.create!="bool")
-                throw "Check name (40 bytes), target pairs (0–500, two decimals), and legal perk order (10 perks, plus Student).";
+                throw "Check name (40 bytes), target pairs (0–500, two decimals), whole weights (0–10), and legal perk order (10 perks, plus Student).";
             next=this.copy(next);local found=this.findBuild(data.definition.id,next);
             if(data.create && found!=null) throw "Build ID already exists. Refresh before creating.";
             if(!data.create && found==null) throw "Build was removed. Refresh before editing.";
@@ -125,13 +129,15 @@
         }
         else if(data.action=="export") {
             if(!("build" in data) || (data.build!=null && typeof data.build!="string")) throw "Choose one build or the whole library.";
-            local selected=data.build==null ? null : this.findBuild(data.build,next);
+            if(source=="starter" && data.build==null) throw "Choose a single starter template to export.";
+            local selected=data.build==null ? null : this.findBuild(data.build,source=="starter" ? this.StarterBuilds : next);
             if(data.build!=null && selected==null) throw "Unknown build.";
             share=this.encodeBuilds(selected==null ? next : [selected],defs);
         }
         else if(data.action=="track") {
-            if(!("build" in data) || typeof data.build!="string") throw "Choose a library build.";
-            local build=this.findBuild(data.build,next);if(build==null) throw "Unknown build.";
+            if(!("build" in data) || typeof data.build!="string") throw "Choose a build.";
+            local build=this.findBuild(data.build,source=="starter" ? this.StarterBuilds : next);if(build==null) throw "Unknown build.";
+            if(!this.validBuild(build,defs)) throw "Build contains unavailable perks or invalid data.";
             state.plan=this.makePlan(build);
         }
         else if(data.action=="enabled") {
@@ -139,7 +145,7 @@
             state.plan=this.copy(state.plan);state.plan.enabled=data.enabled;
         }
         else if(data.action=="replace") {
-            if(state.plan==null || !state.plan.enabled || state.plan.schema==4) throw "No legacy perk alternative.";
+            if(state.plan==null || !state.plan.enabled || state.plan.schema>=4) throw "No legacy perk alternative.";
             local snapshot=this.readActor(actor),plan=this.guidancePlan(state.plan,snapshot);
             if(!("index" in data) || typeof data.index!="integer" || data.index<0 || data.index>=plan.options.len() ||
                 !("replace" in data) || !("with" in data) || !("active" in data)) throw "Unknown perk alternative.";

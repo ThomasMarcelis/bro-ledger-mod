@@ -1,6 +1,6 @@
 ::BroLedger.makePlan <- function(build)
 {
-    return {schema=4,revision=this.Revision,enabled=true,build=build.id,label=build.label,
+    return {schema=5,revision=this.Revision,enabled=true,build=build.id,label=build.label,weights=this.buildWeights(build),
         route=this.copy(build.route),targets=this.copy(build.targets),preferredTargets=this.copy(build.preferred),
         flex=this.copy(build.flex),weaponTags=this.copy(build.weaponTags),playstyleTags=this.copy(build.playstyleTags)};
 };
@@ -27,7 +27,7 @@
 {
     local out = this.copy(plan);
     if (!out.enabled) return out;
-    if(out.schema==4) {
+    if(out.schema>=4) {
         local acquired=[];foreach(id,_ in snapshot.perks) if(out.route.find(id)==null && id!="perk.student") acquired.push(id);
         acquired.sort();
         foreach(id in acquired) foreach(flex in out.flex) {

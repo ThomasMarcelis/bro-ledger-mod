@@ -3,15 +3,16 @@ cases.schemas_roundtrip_and_unknown_retention <- function() {
     local flags=libraryFlags(),a={m={},getFlags=@() flags},saved=null,calls=0;
     B.Mod<-{Serialization={flagSerialize=function(id,p,f){saved=B.copy(p);f.set(B.BlobFlag,1);calls++;},
         flagDeserialize=function(id,def,obj,f){f.remove(B.BlobFlag);calls++;return B.copy(saved);}}};
-    foreach(schema in [1,2,3,4]) {
-        local p=schema==4 ? B.makePlan(userBuild()) : oldPlan(legacy.nimble_2h_berserk);
-        p.schema=schema;if(schema==1)delete p.preferredTargets;
+    foreach(schema in [1,2,3,4,5]) {
+        local p=schema>=4 ? B.makePlan(userBuild()) : oldPlan(legacy.nimble_2h_berserk);
+        p.schema=schema;if(schema==4)delete p.weights;
+        if(schema==1)delete p.preferredTargets;
         if(schema==3){p.core<-["matk","mdef"];p.flex<-["perk.pathfinder"];p.hands<-true;p.variant<-"ordinary";}
         p.enabled=false;check(B.validPlan(p),"historical shape rejected: "+schema);
         B.actorState(a).plan=p;B.savePlan(a);local before=B.copy(saved);B.loadPlan(a);B.savePlan(a);
         check(B.actorState(a).issue==null&&same(saved,before)&&flags.has(B.BlobFlag),"snapshot changed/consumed: "+schema);
     }
-    foreach(schema in [5,999]) {
+    foreach(schema in [6,999]) {
         flags.set(B.SchemaFlag,schema);local before=calls;B.loadPlan(a);B.savePlan(a);
         check(calls==before&&B.actorState(a).issue!=null&&flags.get(B.SchemaFlag)==schema,"future schema touched");
     }

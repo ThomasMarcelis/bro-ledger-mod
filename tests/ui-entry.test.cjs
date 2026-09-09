@@ -12,7 +12,7 @@ function entryFixture() {
     owner.render = Controller.prototype.render;
     owner.panel = new Node().appendTo(owner.screen.mContainer);
     owner.entry = new Node().appendTo(owner.screen.mContainer);
-    owner.entry.createTextButton('Evaluate', () => owner.evaluate());
+    owner.entry.createTextButton('Bro Planner', () => owner.evaluate());
     owner.screen.mDataSource.getSelectedBrother = () => ({id: 7});
     owner.select();
     return f;

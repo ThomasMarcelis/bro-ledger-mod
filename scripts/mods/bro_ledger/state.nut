@@ -29,13 +29,14 @@
 ::BroLedger.validPlan <- function(plan)
 {
     if (typeof plan != "table" || !("schema" in plan) || typeof plan.schema != "integer" ||
-        ([1, 2, 3, 4].find(plan.schema) == null)) return false;
-    if(plan.schema==4) {
-        if(plan.len()!=11) return false;
+        ([1, 2, 3, 4, 5].find(plan.schema) == null)) return false;
+    if(plan.schema>=4) {
+        if(plan.len()!=(plan.schema==5 ? 12 : 11)) return false;
         foreach(k in ["revision","enabled","build","label","route","targets","preferredTargets","flex","weaponTags","playstyleTags"]) if(!(k in plan)) return false;
-        return typeof plan.revision=="integer" && plan.revision>0 && typeof plan.enabled=="bool" &&
-            this.validBuild({id=plan.build,label=plan.label,route=plan.route,targets=plan.targets,preferred=plan.preferredTargets,
-                flex=plan.flex,weaponTags=plan.weaponTags,playstyleTags=plan.playstyleTags});
+        local build={id=plan.build,label=plan.label,route=plan.route,targets=plan.targets,preferred=plan.preferredTargets,
+            flex=plan.flex,weaponTags=plan.weaponTags,playstyleTags=plan.playstyleTags};
+        if(plan.schema==5) {if(!("weights" in plan)) return false;build.weights<-plan.weights;}
+        return typeof plan.revision=="integer" && plan.revision>0 && typeof plan.enabled=="bool" && this.validBuild(build);
     }
     if (plan.len() != (plan.schema == 1 ? 13 : plan.schema == 2 ? 14 : 18)) return false;
     foreach (key in ["revision", "enabled", "build", "label", "route", "targets", "priority", "armour", "swaps", "options", "patterns", "weapons"])
@@ -110,7 +111,7 @@
         if (flags.has(this.BlobFlag)) state.issue = "Unrecognized saved plan; retained without changes.";
         return;
     }
-    if ([1, 2, 3, 4].find(flags.get(this.SchemaFlag)) == null)
+    if ([1, 2, 3, 4, 5].find(flags.get(this.SchemaFlag)) == null)
     {
         state.issue = "Saved by a newer or unsupported " + this.Name + " schema; retained without changes.";
         return;
