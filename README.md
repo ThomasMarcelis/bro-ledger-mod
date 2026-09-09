@@ -2,13 +2,13 @@
 
 A native Battle Brothers build board, weighted evaluator, and per-brother tracker. Open a brother and select **Bro Planner** to compare starter templates and your campaign's builds, then deliberately track one. Every gameplay choice remains yours: the mod never spends points, equips items, switches builds, renames brothers, or generates future rolls.
 
-**0.5.0 is an unverified prerelease.** Automated checks and native browser fixtures provide supporting evidence. The complete in-game player loop, clipboard success, save/removal/reinstall lifecycle, and Windows/Proton compatibility remain unverified.
+**0.5.1 is an unverified prerelease.** Automated checks and native browser fixtures provide supporting evidence. The complete in-game player loop, clipboard success, save/removal/reinstall lifecycle, and Windows/Proton compatibility remain unverified.
 
 ## Install
 
 The development baseline is Battle Brothers **1.5.2.3 with all DLC**, [Modern Hooks](https://github.com/MSUTeam/Modern-Hooks) **0.6.0+**, and [MSU](https://github.com/MSUTeam/MSU) **1.9.0+**. Dependencies are installed separately. Other versions and UI mods have not been verified.
 
-[Download mod_bro_ledger-0.5.0.zip](https://github.com/ThomasMarcelis/bro-ledger-mod/releases/download/v0.5.0/mod_bro_ledger-0.5.0.zip), or build it locally with `python3 tools/package.py`. With the game closed, place the ZIP in its `data/` folder **without extracting it**. Keep only one planner ZIP and restart the game fully after updating. The technical ID and ZIP prefix remain `mod_bro_ledger` to preserve save identity.
+[Download mod_bro_ledger-0.5.1.zip](https://github.com/ThomasMarcelis/bro-ledger-mod/releases/download/v0.5.1/mod_bro_ledger-0.5.1.zip), or build it locally with `python3 tools/package.py`. With the game closed, place the ZIP in its `data/` folder **without extracting it**. Keep only one planner ZIP and restart the game fully after updating. The technical ID and ZIP prefix remain `mod_bro_ledger` to preserve save identity.
 
 To remove, close the game and remove the ZIP. Namespaced plans and the campaign library are intended to remain dormant for a compatible reinstall; verify this lifecycle on a save copy before relying on it. Back up your saves before trying the candidate.
 
@@ -20,7 +20,7 @@ Track a starter directly, or select **Copy & edit** to make a personal draft. Sa
 
 **Create build** opens the board: name, **Attributes Ranges**, weights, native perk tree, acquisition order, flexible picks, and weapon/equipment and playstyle tags. Minimum and Ideal allow 0–500 with two decimal places. Leave a range pair blank to omit that attribute. **Weight** is a whole number from 0–10: 2 counts twice as much as 1; 0 ignores the attribute while retaining its range. Builds with no weighted targets are unrated.
 
-Checked **Flexible** means the suggested perk can yield to an off-route perk you learn manually. Unchecked means mandatory. Move picks with Up/Down; routes must respect native unlocks and the ten-point budget (eleven picks with Student).
+Checked **Flexible** means the suggested perk can yield to an off-route perk you learn manually. Unchecked means mandatory. Move picks with Up/Down; routes must respect native unlocks and the ten-point budget (eleven picks with Student). Long perk orders scroll independently, keeping the build name, order heading, and Save/Cancel controls visible. Adding or moving a perk keeps it in view; other editor fields scroll separately when needed.
 
 **Potential** is the best weighted average of capped target satisfaction from one legal shared allocation at average rolls. Higher weights have more influence; excess above Ideal contributes nothing. An overall 50 does not mean every Minimum is met. Scores measure creator-defined target fit, not combat power or win probability. Comparison shows ten matches per page, with every remaining match reachable through Next/Previous. Weapon, Playstyle, and Source filters combine; Source separates My builds and Starters.
 

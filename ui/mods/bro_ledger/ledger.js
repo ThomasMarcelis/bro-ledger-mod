@@ -48,6 +48,7 @@ var BroLedgerUI = (function () {
         this.enabled = null;
         this.visible = false;
         this.popup = null;
+        this.editorResize = null;
         this.panel = null;
         this.offerContent = null;
     }
@@ -198,6 +199,7 @@ var BroLedgerUI = (function () {
         var self = this; this.request('evaluate', {}, function (data) { if (data.settings.Enabled) self.compare(data); });
     };
     Controller.prototype.closeCompare = function () {
+        if (this.editorResize) { $(window).off('resize', this.editorResize); this.editorResize = null; }
         if (!this.popup) return;
         disposeLists(this.popup); this.popup.destroyPopupDialog(); this.popup = null;
         this.screen.mDataSource.notifyBackendPopupDialogIsVisible(false);
@@ -334,8 +336,9 @@ var BroLedgerUI = (function () {
         var body=$('<div class="bl-editor-body"/>').appendTo(popup.findPopupDialogContentContainer());
         var title=$('<label class="bl-name-field text-font-normal"/>').text('Build name ').appendTo(body);
         var name=$('<input type="text" maxlength="40"/>').val(b.label).appendTo(title);
-        var board=$('<div class="bl-board"/>').appendTo(body),left=$('<div class="bl-board-targets"/>').appendTo(board);
-        var middle=$('<div class="bl-board-perks"/>').appendTo(board),right=$('<div class="bl-board-order"/>').appendTo(board);
+        var board=$('<div class="bl-board"/>').appendTo(body),main=$('<div class="bl-board-main"/>').appendTo(board);
+        var fields=$('<div class="bl-board-fields"/>').appendTo(main),left=$('<div class="bl-board-targets"/>').appendTo(fields);
+        var middle=$('<div class="bl-board-perks"/>').appendTo(fields),right=$('<div class="bl-board-order"/>').appendTo(board);
         text(left,'Attributes Ranges',true);text(left,'Ranges: 0–500, two decimals. Blank pair = ignored.');
         text(left,'Weight 0–10: 0 ignores; 2 = twice 1.');
         var targetTable=$('<table class="bl-targets bl-input-targets"/>').appendTo(left),inputs={};
@@ -363,28 +366,48 @@ var BroLedgerUI = (function () {
         }
         tags(left,'Playstyle',data.playstyleTags,'playstyleTags');
         text(middle,'Perks · click to add / remove',true);
-        var tree=$('<div class="bl-perk-tree"/>').appendTo(middle),order=$('<div class="bl-edit-route"/>').appendTo(right);
+        var tree=$('<div class="bl-perk-tree"/>').appendTo(middle),header=$('<div class="bl-order-header"/>').appendTo(right);
+        text(header,'Perk order',true);var count=text(header,'');
+        text(header,'A flexible pick can yield to an off-route perk you learn manually.');
+        var listHost=$('<div class="bl-order-list-host"/>').appendTo(right);
+        var list=listHost.createList(8,'bl-scroll bl-order-scroll',true),order=list.findListScrollContainer().addClass('bl-edit-route');
+        var viewport=list.aciScrollBar('container');
+        // The native control allows wheel events to bubble at the ends of its list.
+        list.on('mousewheel',function(e){e.preventDefault();e.stopPropagation();});
+        function layoutOrder(){
+            if(!self.current(data,popup))return;
+            listHost.css('top',header.outerHeight(true));list.trigger('update');
+        }
+        function revealRow(row){
+            var top=row.offset().top-viewport.offset().top,bottom=top+row.outerHeight(true);
+            if(top<0)list.trigger('scroll',{top:viewport.scrollTop()+top});
+            else if(bottom>viewport.innerHeight())list.trigger('scroll',{top:viewport.scrollTop()+bottom-viewport.innerHeight()});
+        }
+        this.editorResize=layoutOrder;$(window).on('resize',layoutOrder);
         function tiny(parent,label,title,action){return $('<button type="button" class="bl-small"/>').text(label).attr('title',title).on('click',action).appendTo(parent);}
         var routeVersion=0;
-        function drawRoute(){
-            var version=++routeVersion;disposeCheckboxes(order);order.empty();text(order,'Perk order',true);
-            text(order,b.route.length+' picks · unchecked = mandatory');
-            text(order,'A flexible pick can yield to an off-route perk you learn manually.');
+        function drawRoute(revealID,direction){
+            var version=++routeVersion,scrollTop=viewport.scrollTop(),reveal=null,focus=null;
+            disposeCheckboxes(order);order.empty();count.text(b.route.length+' picks · unchecked = mandatory');
             b.route.forEach(function(id,i){
-                var row=$('<div class="bl-edit-perk text-font-normal"/>').appendTo(order);
+                var row=$('<div class="bl-edit-perk text-font-normal"/>').attr('data-perk',id).appendTo(order);
                 $('<span/>').text((i+1)+'. '+perkName(id,data.defs)).appendTo(row);
                 var actions=$('<div class="bl-perk-actions"/>').appendTo(row);
-                tiny(actions,'Up','Move earlier',function(){if(self.current(data,popup)&&version===routeVersion&&i>0){b.route.splice(i-1,0,b.route.splice(i,1)[0]);drawRoute();}}).prop('disabled',i===0);
-                tiny(actions,'Dn','Move later',function(){if(self.current(data,popup)&&version===routeVersion&&i<b.route.length-1){b.route.splice(i+1,0,b.route.splice(i,1)[0]);drawRoute();}}).prop('disabled',i===b.route.length-1);
+                var up=tiny(actions,'Up','Move earlier',function(){if(self.current(data,popup)&&version===routeVersion&&i>0){b.route.splice(i-1,0,b.route.splice(i,1)[0]);drawRoute(id,'up');}}).prop('disabled',i===0);
+                var down=tiny(actions,'Dn','Move later',function(){if(self.current(data,popup)&&version===routeVersion&&i<b.route.length-1){b.route.splice(i+1,0,b.route.splice(i,1)[0]);drawRoute(id,'down');}}).prop('disabled',i===b.route.length-1);
                 var label=$('<label class="bl-flex-control"/>').appendTo(actions);$('<span/>').text('Flexible').appendTo(label);
                 checkbox(label,b.flex.indexOf(id)!==-1,function(checked){if(!self.current(data,popup)||version!==routeVersion)return;
                     var at=b.flex.indexOf(id);if(checked&&at===-1)b.flex.push(id);else if(!checked&&at!==-1)b.flex.splice(at,1);});
                 if(!data.defs[id]||data.defs[id].unlock>i)row.addClass('bl-target-impossible').attr('title',!data.defs[id]?'Perk unavailable.':'Requires '+data.defs[id].unlock+' earlier picks. Reorder or add earlier-tier perks.');
+                if(id===revealID){reveal=row;if(direction)focus=direction==='up'?(i>0?up:down):(i<b.route.length-1?down:up);}
             });
             tree.find('.bl-perk-choice').each(function(){
                 var selected=b.route.indexOf($(this).attr('data-perk'))!==-1;
                 $(this).toggleClass('is-selected',selected).attr('aria-pressed',selected);
             });
+            layoutOrder();list.trigger('scroll',{top:scrollTop});
+            if(reveal)revealRow(reveal);
+            if(focus)focus.focus();
         }
         var tier=null,treeRow=null;
         Object.keys(data.defs).sort(function(a,c){return data.defs[a].row-data.defs[c].row||data.defs[a].column-data.defs[c].column;}).forEach(function(id){
@@ -392,7 +415,7 @@ var BroLedgerUI = (function () {
             if(tier!==def.row){tier=def.row;treeRow=$('<div class="bl-perk-tier"/>').appendTo(tree);}
             var node=$('<button type="button" class="bl-perk-choice"/>').attr('data-perk',id).attr('title',def.name+' · '+def.unlock+' earlier picks').attr('aria-label',def.name).appendTo(treeRow);
             if(def.icon)$('<img/>').attr('src',Path.GFX+def.icon).attr('alt',def.name).appendTo(node);else node.text(def.name);
-            node.on('click',function(){if(!self.current(data,popup))return;var at=b.route.indexOf(id);if(at===-1){if(b.route.length>=11){self.showError('At most 11 picks, including Student. Remove a perk first.');return;}b.route.push(id);}else{b.route.splice(at,1);at=b.flex.indexOf(id);if(at!==-1)b.flex.splice(at,1);}drawRoute();});
+            node.on('click',function(){if(!self.current(data,popup))return;var at=b.route.indexOf(id),added=at===-1;if(added){if(b.route.length>=11){self.showError('At most 11 picks, including Student. Remove a perk first.');return;}b.route.push(id);}else{b.route.splice(at,1);at=b.flex.indexOf(id);if(at!==-1)b.flex.splice(at,1);}drawRoute(added?id:null);});
         });
         tags(middle,'Weapon / equipment',data.weaponTags,'weaponTags');drawRoute();
         popup.addPopupDialogCancelButton(function(){if(self.popup===popup)self.evaluate();});

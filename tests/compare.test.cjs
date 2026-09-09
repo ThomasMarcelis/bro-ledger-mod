@@ -2,7 +2,7 @@ const {test,afterEach}=require('node:test');
 const assert=require('node:assert/strict');
 const {fixture,click}=require('./ui-fixture.cjs');
 const {matches}=require('../ui/mods/bro_ledger/ledger.js');
-const original={SQ:global.SQ,$:global.$,Path:global.Path,document:global.document};
+const original={SQ:global.SQ,$:global.$,Path:global.Path,document:global.document,window:global.window};
 afterEach(()=>{for(const[k,v]of Object.entries(original)){if(v===undefined)delete global[k];else global[k]=v;}});
 test('empty, one and many libraries expose real matches with ten per page and every remainder reachable',()=>{
     for(const count of [0,1,10,14,32,42]){
@@ -149,7 +149,29 @@ test('perk icons toggle flex/order without allowing an unbounded draft route',()
     click(s.button('Up'));const first=s.byClass('bl-edit-perk')[0];assert.equal(first.children[0].value,'1. Colossus');
     const second=s.byClass('bl-edit-perk')[1];click(second.children[1].children[0]);
     assert.equal(s.byClass('bl-edit-perk')[0].children[0].value,'1. Gifted');
+    assert.equal(s.byClass('bl-edit-perk')[0].children[1].children[1].focused,true,'focus did not follow the moved perk to its enabled control');
     click(s.button('Save build'));assert.deepEqual(s.calls[0].request.definition.route,['perk.gifted','perk.colossus']);
+});
+
+test('native order list survives edits, contains wheel events and disposes resize callbacks',()=>{
+    const s=fixture(1);s.owner.editor(s.data,s.data.library[0]);
+    const list=s.byClass('bl-order-scroll')[0],viewport=list.aciScrollBar('container');
+    viewport.scrollTop(80);
+    const flex=s.byClass('bl-edit-perk')[0].children[1].children[2].children[0];
+    flex.prop('checked',true).trigger('ifChecked');
+    assert.equal(viewport.scrollTop(),80);assert.equal(s.byClass('bl-order-scroll')[0],list);
+    click(s.byClass('bl-perk-choice').find(n=>n.attr('data-perk')==='perk.student'));
+    assert.equal(s.byClass('bl-order-scroll')[0],list);assert.equal(viewport.scrollTop(),80);
+    assert.equal(flex.destroyed,true,'rebuilt row retained its checkbox instance');
+    let prevented=0,stopped=0;
+    list.trigger('mousewheel',{preventDefault(){prevented++;},stopPropagation(){stopped++;}});
+    assert.equal(prevented,1);assert.equal(stopped,1);
+    const resize=s.owner.editorResize,updates=list.updates;
+    s.window.trigger('resize');assert.ok(list.updates>updates);
+    s.owner.actor=8;resize();const staleUpdates=list.updates;
+    s.owner.closeCompare();resize();
+    assert.equal(list.updates,staleUpdates);assert.equal(list.listDestroyed,true);
+    assert.equal(s.window.handlers.resize,undefined);assert.equal(s.owner.editorResize,null);
 });
 test('editor follows source positions and keeps selected perks through reorder, flex, removal and edit save',()=>{
     const s=fixture(1),before=JSON.stringify(s.data.library);

@@ -23,12 +23,23 @@ function fixture(count=14, plan=null, issue=null) {
         show(){this.hidden=false;return this;}
         toggle(v){this.hidden=!v;return this;}
         on(e,fn){e.split(' ').forEach(name=>this.handlers[name]=fn);return this;}
+        off(e,fn){if(this.handlers[e]===fn)delete this.handlers[e];return this;}
+        css(k,v){this.styles=this.styles||{};this.styles[k]=v;return this;}
+        outerHeight(){return 0;}innerHeight(){return 0;}offset(){return {top:0};}
+        scrollTop(v){if(v===undefined)return this.scrollPosition||0;this.scrollPosition=v;return this;}
         iCheck(action){if(action==='destroy'){this.destroyed=true;return this;}this.skinned=true;return this;}
         find(selector){const out=[];const visit=n=>n.children.forEach(c=>{if(c.classes.has(selector.slice(1)))out.push(c);visit(c);});visit(this);return collection(out);}
-        trigger(e){if(e==='hide-tooltip')this.pendingTooltip=false;if(this.handlers[e])this.handlers[e]({});return this;}
+        trigger(e,data){if(e==='hide-tooltip')this.pendingTooltip=false;
+            if(e==='update')this.updates=(this.updates||0)+1;
+            if(e==='scroll'&&this.listViewport&&data)this.listViewport.scrollTop(data.top);
+            if(this.handlers[e])this.handlers[e](data||{});return this;}
         bindTooltip(data){this.tooltip=data;this.pendingTooltip=true;return this;}
         unbindTooltip(){this.tooltip=null;return this;}
-        destroyList(){return this;}
+        createList(delta,classes){const list=new Node().addClass(classes).appendTo(this);
+            list.listViewport=new Node().appendTo(list);list.listContent=new Node().appendTo(list.listViewport);return list;}
+        findListScrollContainer(){return this.listContent;}
+        aciScrollBar(action){if(action!=='container')throw Error('Unexpected scrollbar action');return this.listViewport;}
+        destroyList(){this.listDestroyed=true;return this;}
         enableButton(v){this.disabled=!v;return this;}
         createTextButton(label,action){return new Node().text(label).on('click',action).appendTo(this);}
         changeButtonText(label){this.text(label);return null;}
@@ -43,6 +54,7 @@ function fixture(count=14, plan=null, issue=null) {
         filter(fn){return collection(items.filter(n=>fn.call(n)));},removeClass(s){items.forEach(n=>n.removeClass(s));return this;},
         addClass(s){items.forEach(n=>n.addClass(s));return this;},remove(){items.forEach(n=>n.remove());return this;}};}
     global.$=v=>typeof v==='string'?new Node(v):v;global.Path={GFX:'coui://gfx/'};
+    global.window=new Node();
     global.SQ={call(handle,method,request,callback){calls.push({request,callback});}};
     const owner=new Controller({mContainer:new Node(),mSQHandle:'fixture',mDataSource:{notifyBackendPopupDialogIsVisible:v=>notices.push(v)}});
     owner.visible=true;owner.actor=7;owner.render=()=>{};
@@ -56,7 +68,7 @@ function fixture(count=14, plan=null, issue=null) {
         route:{remaining:b.route,acquired:[],blocked:[],offplan:[],unknown:[],conflicts:[],feasible:true}}));
     owner.data=data;owner.compare(data);
     function all(){const out=[];const visit=n=>{out.push(n);n.children.forEach(visit);};visit(owner.popup);return out;}
-    return {owner,data,calls,notices,nodes,all,byClass:cls=>all().filter(n=>n.classes.has(cls)),
+    return {owner,data,calls,notices,nodes,all,window:global.window,byClass:cls=>all().filter(n=>n.classes.has(cls)),
         button:label=>all().find(n=>n.value===label&&n.handlers.click),
         reply(extra={}){const c=calls.at(-1);c.callback({...data,seq:c.request.seq,...extra});}};
 }

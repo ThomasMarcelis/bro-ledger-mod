@@ -1,5 +1,5 @@
 ::BroLedger <- {
-    ID = "mod_bro_ledger", Name = "Bro Planner", Version = "0.5.0", Revision = 6,
+    ID = "mod_bro_ledger", Name = "Bro Planner", Version = "0.5.1", Revision = 6,
     Stats = ["hp", "resolve", "fatigue", "initiative", "matk", "ratk", "mdef", "rdef"],
     StatNames = {hp="HP",resolve="Resolve",fatigue="Fatigue",initiative="Initiative",matk="Melee Skill",ratk="Ranged Skill",mdef="Melee Defence",rdef="Ranged Defence"}
 };
