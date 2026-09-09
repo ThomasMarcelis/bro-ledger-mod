@@ -13,12 +13,13 @@ function same(a,b) {
 
 function fixture()
 {
-    local s = {stats={}, stars={}, ranges={}, scale={}, horizon=11, normalRows=10, veteranRows=0, giftRows=0, growthKnown=true,
+    local s = {stats={}, rawStats={}, initiativeLoss=0, stars={}, ranges={}, scale={}, horizon=11, normalRows=10, veteranRows=0, giftRows=0, growthKnown=true,
         perks={}, notes=[], warnings=[], level=1, pending=0, free=1, spent=0, futurePerks=9};
     foreach (k in B.Stats)
     {
         s.stats[k] <- 0; s.stars[k] <- 0; s.ranges[k] <- [2,4]; s.scale[k] <- 1.0;
     }
+    s.rawStats=s.stats;
     s.ranges.matk = [1,3]; s.ranges.mdef = [1,3];
     return s;
 }
@@ -58,8 +59,11 @@ function actorFixture()
 }
 function skill(id,type) {return {getID=@() id,getType=@() type};}
 
-function gearFixture()
+// Historical owned shape, independent of the current plan writer.
+function oldPlan(build)
 {
-    return {head=-10,body=-30,headArmour=210,bodyArmour=300,brawny=false,capacity=45,fatigue=8,
-        stamina=45,mult=1.0,recovery=15,ap=9,actions={},items=[{name="Named axe",raw=-18,bag=false},{name="Longaxe",raw=-14,bag=true}]};
+    return {schema=2, revision=2, enabled=true, build=build.id, label=build.label,
+        route=B.copy(build.route), targets=B.copy(build.targets), priority=B.copy(build.priority),
+        preferredTargets=B.copy(build.preferred), armour=build.armour, swaps=[], options=B.copy(build.swaps),
+        weapons=build.weapons, patterns=B.copy(build.patterns)};
 }

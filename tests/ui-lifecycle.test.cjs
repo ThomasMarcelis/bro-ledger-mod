@@ -45,7 +45,7 @@ function session() {
         return owner;
     }
     const reply = index => calls[index].callback({actor: calls[index].data.actor,
-        seq: calls[index].data.seq, epoch: 42, revision: 2, plan: {enabled: true}});
+        seq: calls[index].data.seq, epoch: 42, revision: 2, settings: {Enabled: true}, plan: {enabled: true}});
     return {screen, source, connect, reply, calls, errors, renders, roots, foreign,
         disconnectCount: () => disconnected};
 }

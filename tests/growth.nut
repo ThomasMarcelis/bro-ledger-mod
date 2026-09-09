@@ -37,57 +37,6 @@ cases.finite_solver_matches_two_real_row_enumerations <- function() {
     }
 };
 
-cases.projection_is_one_finite_allocation <- function() {
-    foreach(b in B.Builds) {
-        local s=fixture();s.stats={hp=60,fatigue=100,resolve=40,initiative=105,matk=60,ratk=55,mdef=5,rdef=0};
-        s.stars.matk=2;s.stars.ratk=2;s.stars.mdef=2;
-        local e=B.evaluate(s,b,defs),p=e.projection,prepared=B.forPlan(s,B.candidatePlan(b,s));
-        check(p.known,"known fixture lost projection: "+b.id);
-        local totals=[0,0,0],caps=[prepared.normalRows,prepared.veteranRows,prepared.giftRows];
-        foreach(k in B.Stats) {
-            local counts=p.allocation[k],gain=B.gain(prepared,k,"mean");
-            for(local i=0;i<3;i++) {check(counts[i]>=0 && counts[i]<=caps[i],"stat picked twice on one row");totals[i]+=counts[i];}
-            local expected=s.stats[k]+counts[0]*gain+counts[1]+counts[2]*s.ranges[k][1];
-            check(fabs(expected-p.stats[k])<0.001,"displayed growth does not match allocation");
-            if(["S","A","B"].find(e.grade)!=null && k in b.targets) check(p.stats[k]>=b.targets[k],"feasible grade lost a minimum");
-            if(e.grade=="S" && k in b.preferred) check(p.stats[k]>=b.preferred[k],"S forecast lost an Ideal");
-        }
-        for(local i=0;i<3;i++) check(totals[i]==3*caps[i],"projection did not use three picks per row");
-    }
-};
-
-cases.offer_minimum_then_ideal <- function() {
-    local s=fixture();s.normalRows=1;
-    foreach(k in B.Stats) s.stats[k]=80;
-    local p={route=[],targets={hp=80,matk=80,mdef=80},preferredTargets={hp=84,matk=83,mdef=83},
-        priority=["initiative","ratk","rdef","resolve"]},offer={};
-    foreach(k in B.Stats) offer[k]<-3;
-    offer.hp=4;
-    local advice=B.adviseOffer(s,p,offer);
-    foreach(k in ["hp","matk","mdef"]) check(advice.picks.find(k)!=null,"met minima stopped Ideal investment");
-    p.targets.resolve<-81;p.preferredTargets.resolve<-81;
-    check(B.adviseOffer(s,p,offer).picks.find("resolve")!=null,"Ideal displaced missing Minimum");
-    delete p.preferredTargets;
-    advice=B.adviseOffer(s,p,offer);
-    check(advice.picks.find("resolve")!=null && advice.reason.find("Ideal")==null,"legacy plan lost honest Minimum guidance");
-};
-
-cases.fractional_growth_and_determinism <- function() {
-    local s=fixture(),p=B.makePlan(B.findBuild("tempo_spear"));
-    s.normalRows=2;s.veteranRows=1;s.giftRows<-1;s.scale.hp=0.7;
-    s.stats={hp=59.5,resolve=40,fatigue=88,initiative=100,matk=54,ratk=40,mdef=12,rdef=0};
-    local a=B.assess(s,p,p.preferredTargets,true);
-    for(local i=0;i<5;i++) {
-        local b=B.assess(s,p,p.preferredTargets,true);
-        foreach(k in B.Stats) {
-            check(a.projection.stats[k]==b.projection.stats[k],"forecast varies on refresh");
-            foreach(j,n in a.projection.allocation[k]) check(n==b.projection.allocation[k][j],"witness varies on refresh");
-        }
-    }
-    local n=a.projection.allocation.hp;
-    check(fabs(a.projection.stats.hp-(59.5+0.7*(n[0]*3+n[1]+n[2]*4)))<0.001,"permanent injury gain scaled incorrectly");
-};
-
 cases.fractional_threshold <- function()
 {
     local s = fixture();
@@ -106,18 +55,6 @@ cases.joint_budget <- function()
     check(!f.feasible && f.required == 4 && f.capacity == 3, "joint budget exceeded");
 };
 
-cases.fractional_shortfall_and_offer_progress <- function()
-{
-    local s=fixture(); s.normalRows=1; s.stars.mdef=1;
-    check(B.feasibility(s,{mdef=4.5},"mean").required==2,"fractional gain truncated in shortfall count");
-    s.stats.hp=10; s.stats.resolve=40;
-    local offer={}; foreach(k in B.Stats) offer[k]<-1;
-    local p={route=[],targets={hp=10.5,resolve=40.25,matk=1,mdef=1},priority=["resolve","hp","matk","mdef"]};
-    local advice=B.adviseOffer(s,p,offer);
-    check(advice.picks.find("hp")!=null && advice.picks.find("matk")!=null && advice.picks.find("mdef")!=null,
-        "fractional target progress lost to priority tie-break");
-};
-
 cases.unknown_is_not_zero <- function()
 {
     local s = fixture(); s.stars.mdef = null;
@@ -133,4 +70,5 @@ cases.current_offer <- function()
     check(s.stats.hp==0 && offer.hp==4, "advice mutated source");
     check(advice.considered==56, "ordinary choices not fully enumerated");
 };
+
 return cases;

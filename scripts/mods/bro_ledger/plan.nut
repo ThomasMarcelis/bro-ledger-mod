@@ -1,21 +1,11 @@
 ::BroLedger.makePlan <- function(build)
 {
-    return {schema = 2, revision = this.Revision, enabled = true, build = build.id, label = build.label,
-        route = this.copy(build.route), targets = this.copy(build.targets), priority = this.copy(build.priority),
-        preferredTargets = this.copy(build.preferred), armour = build.armour, swaps = [],
-        options = this.copy(build.swaps), weapons = build.weapons, patterns = this.copy(build.patterns)};
+    return {schema=4,revision=this.Revision,enabled=true,build=build.id,label=build.label,
+        route=this.copy(build.route),targets=this.copy(build.targets),preferredTargets=this.copy(build.preferred),
+        flex=this.copy(build.flex),weaponTags=this.copy(build.weaponTags),playstyleTags=this.copy(build.playstyleTags)};
 };
-
-::BroLedger.planPreferred <- function(plan)
-{
-    if ("preferredTargets" in plan) return this.copy(plan.preferredTargets);
-    if (!("build" in plan)) return null;
-    local build = this.findBuild(plan.build);
-    if (build == null || plan.revision != this.Revision || plan.targets.len() != build.targets.len()) return null;
-    foreach (key, value in plan.targets)
-        if (!(key in build.targets) || value != build.targets[key]) return null;
-    return this.copy(build.preferred);
-};
+::BroLedger.planFlex <- function(plan) {return "flex" in plan ? plan.flex : [];};
+::BroLedger.planPreferred <- function(plan) {return "preferredTargets" in plan ? this.copy(plan.preferredTargets) : null;};
 
 ::BroLedger.replacePlan <- function(plan, index, perks)
 {
@@ -35,8 +25,17 @@
 // Resolve manual acquisitions on a copy; older revisions retain only their saved options.
 ::BroLedger.guidancePlan <- function(plan, snapshot)
 {
-    local out = this.copy(plan), build = this.findBuild(out.build);
+    local out = this.copy(plan);
     if (!out.enabled) return out;
+    if(out.schema==4) {
+        local acquired=[];foreach(id,_ in snapshot.perks) if(out.route.find(id)==null && id!="perk.student") acquired.push(id);
+        acquired.sort();
+        foreach(id in acquired) foreach(flex in out.flex) {
+            local at=out.route.find(flex);
+            if(at!=null && !(flex in snapshot.perks)) {out.route[at]=id;break;}
+        }
+        return out;
+    }
     foreach (index, option in out.options)
     {
         if (out.swaps.find(index) != null && option.replace in snapshot.perks && !(option.with in snapshot.perks))
@@ -62,7 +61,7 @@
     {
         if (out.route.find(id) != null || support.find(id) == null) continue;
         local slot = null;
-        foreach (flex in build != null && out.revision == this.Revision ? build.flex : [])
+        foreach (flex in this.planFlex(out))
         {
             local from = flex;
             foreach (index in out.swaps) if (out.options[index].replace == flex) from = out.options[index].with;
@@ -96,11 +95,10 @@
 
 ::BroLedger.flexPerks <- function(plan, snapshot, defs)
 {
-    local ids = [], build = this.findBuild(plan.build);
+    local ids = [];
     if (snapshot.free < 0 || snapshot.futurePerks < 0 || snapshot.free + snapshot.futurePerks == 0) return ids;
-    if (build != null && plan.revision == this.Revision)
-        foreach (id in build.flex) if (plan.route.find(id) != null) ids.push(id);
-    foreach (option in plan.options)
+    foreach (id in this.planFlex(plan)) if (plan.route.find(id) != null) ids.push(id);
+    foreach (option in ("options" in plan ? plan.options : []))
     {
         local from = option.replace;
         foreach (index in plan.swaps)
@@ -133,7 +131,13 @@
     }
     foreach (id, _ in snapshot.perks)
         if (id != "perk.student" && plan.route.find(id) == null) offplan.push(id);
+    local pointsKnown = snapshot.free >= 0 && snapshot.spent >= snapshot.perks.len() && snapshot.futurePerks >= 0;
     local order = [], spent = snapshot.spent, work = this.copy(remaining);
+    local points = pointsKnown ? snapshot.free + snapshot.futurePerks : 0;
+    local refund = false;
+    // An unowned Student costs a point before its single refund, even at the cap.
+    // Owned Student's still-future refund is already in futurePerks.
+    local available = points;
     while (work.len() > 0)
     {
         local found = null;
@@ -144,13 +148,20 @@
                 break;
             }
         if (found == null) break;
-        order.push(work[found]);
+        local id = work[found];
+        order.push(id);
         work.remove(found);
         spent++;
+        if (available > 0)
+        {
+            available--;
+            if (id == "perk.student") { available++; points++; refund = true; }
+        }
+        else available--;
     }
-    local pointsKnown = snapshot.free >= 0 && snapshot.spent >= snapshot.perks.len() && snapshot.futurePerks >= 0;
     return {remaining = order, blocked = work, acquired = acquired, offplan = offplan, unknown = unknown, conflicts = conflicts,
+        pointsKnown = pointsKnown, points = points, studentRefund = refund,
         feasible = pointsKnown && conflicts.len() == 0 && unknown.len() == 0 && work.len() == 0 &&
-            remaining.len() <= snapshot.free + snapshot.futurePerks,
+            remaining.len() <= points,
         next = pointsKnown && snapshot.free > 0 && order.len() > 0 && defs[order[0]].unlock <= snapshot.spent ? order[0] : null};
 };

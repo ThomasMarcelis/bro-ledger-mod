@@ -4,10 +4,10 @@ Bro Ledger is a small, solo-maintained native Battle Brothers evaluator and per-
 
 ## Product boundary
 
-The player loop is: open a brother → Evaluate → compare all 44 builds → deliberately track one → follow persisted perk, stat, and equipment guidance through ordinary manual play.
+The player loop is: open a brother → Evaluate → create/import and compare community builds → deliberately track one → follow saved perk and stat guidance with current learned effects through ordinary manual play.
 
 - Target vanilla mechanics with all DLC. Modern Hooks and MSU are required; compatibility claims need evidence.
-- Squirrel owns evaluation, guidance, definitions, and persistence. JavaScript/CSS only present results and relay actions.
+- Squirrel owns evaluation, guidance, community definition validation, and persistence. JavaScript/CSS only present results and relay actions.
 - Preserve the native sheet, roster, stash, controls, and acquired/locked perk readability.
 - Never choose builds, spend points, equip items, rename brothers, reveal future rolls, advance RNG, or simulate by mutating a live actor.
 - Read safe live objects and definitions. Keep only versioned strategy and bounded source-backed hypothetical calculations.
@@ -41,4 +41,4 @@ Use ordinary reversible engineering judgment. Escalate product ambiguity, disput
 
 Record exact commands, results, versions, and remaining gaps privately. Standalone Squirrel tests, source inspection, fixtures, and ZIP creation do not prove in-game fit, lifecycle safety, or platform compatibility.
 
-A release claim requires the complete player loop, honest full-catalog coverage, manual-choice updates, conditional equipment advice, and ZIP install/removal/save lifecycle on the declared baseline. Report an unverified candidate when runtime evidence is missing.
+A verified release requires the complete player loop, access to every library match, manual-choice updates, current learned effects, and campaign/library/plan save and ZIP removal/reinstall lifecycle on the declared baseline. Publish only as an unverified prerelease when runtime evidence is missing.

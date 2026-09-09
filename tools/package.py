@@ -31,5 +31,5 @@ package(ROOT / 'dist' / f'mod_bro_ledger-{version}.zip',
         {path.relative_to(ROOT).as_posix(): path for path in paths})
 
 if '--audit' in sys.argv:
-    package(ROOT / 'dist/mod_bro_ledger-audit-0.1.0.zip',
+    package(ROOT / 'dist/mod_bro_ledger-audit-0.1.1.zip',
             {'scripts/!mods_preload/mod_bro_ledger_audit.nut': ROOT / 'tests/runtime_audit.nut'})

@@ -29,8 +29,15 @@
 ::BroLedger.validPlan <- function(plan)
 {
     if (typeof plan != "table" || !("schema" in plan) || typeof plan.schema != "integer" ||
-        (plan.schema != 1 && plan.schema != 2)) return false;
-    if (plan.len() != (plan.schema == 1 ? 13 : 14)) return false;
+        ([1, 2, 3, 4].find(plan.schema) == null)) return false;
+    if(plan.schema==4) {
+        if(plan.len()!=11) return false;
+        foreach(k in ["revision","enabled","build","label","route","targets","preferredTargets","flex","weaponTags","playstyleTags"]) if(!(k in plan)) return false;
+        return typeof plan.revision=="integer" && plan.revision>0 && typeof plan.enabled=="bool" &&
+            this.validBuild({id=plan.build,label=plan.label,route=plan.route,targets=plan.targets,preferred=plan.preferredTargets,
+                flex=plan.flex,weaponTags=plan.weaponTags,playstyleTags=plan.playstyleTags});
+    }
+    if (plan.len() != (plan.schema == 1 ? 13 : plan.schema == 2 ? 14 : 18)) return false;
     foreach (key in ["revision", "enabled", "build", "label", "route", "targets", "priority", "armour", "swaps", "options", "patterns", "weapons"])
         if (!(key in plan)) return false;
     if (typeof plan.revision != "integer" || plan.revision < 1 || plan.revision > 1000000 || typeof plan.enabled != "bool" ||
@@ -40,11 +47,18 @@
         (plan.armour != "nimble" && plan.armour != "battle_forged") ||
         typeof plan.swaps != "array" || plan.swaps.len() > 5 || typeof plan.options != "array" || plan.options.len() > 5 ||
         typeof plan.patterns != "array" || plan.patterns.len() > 4) return false;
-    if (plan.schema == 2)
+    if (plan.schema >= 2)
     {
         if (!("preferredTargets" in plan) || !this.validTargets(plan.preferredTargets)) return false;
         foreach (key, value in plan.targets)
             if (!(key in plan.preferredTargets) || plan.preferredTargets[key] < value) return false;
+    }
+    if (plan.schema == 3)
+    {
+        foreach (key in ["core", "flex", "hands", "variant"]) if (!(key in plan)) return false;
+        if (!this.uniqueStrings(plan.core, 8) || !this.uniqueStrings(plan.flex, 12) || typeof plan.hands != "bool" ||
+            ["ordinary", "manhunter7"].find(plan.variant) == null) return false;
+        foreach (key in plan.core) if (!(key in plan.targets)) return false;
     }
     foreach (key in plan.priority) if (this.Stats.find(key) == null) return false;
     foreach (option in plan.options)
@@ -64,6 +78,8 @@
         if (!this.validString(cycle.label, 800) || typeof cycle.steps != "array" || cycle.steps.len() == 0 || cycle.steps.len() > 3 ||
             typeof cycle.turns != "integer" || cycle.turns < 1 || cycle.turns > 5 || !this.number(cycle.buffer) || cycle.buffer < 0 || cycle.buffer > 50 ||
             !this.number(cycle.move) || cycle.move < 0 || cycle.move > 10 || typeof cycle.kill != "bool") return false;
+        if ("requires" in cycle && !this.uniqueStrings(cycle.requires, 6)) return false;
+        if ("condition" in cycle && !this.validString(cycle.condition, 800)) return false;
         foreach (step in cycle.steps)
         {
             if (typeof step != "table") return false;
@@ -94,7 +110,7 @@
         if (flags.has(this.BlobFlag)) state.issue = "Unrecognized saved plan; retained without changes.";
         return;
     }
-    if ([1, 2].find(flags.get(this.SchemaFlag)) == null)
+    if ([1, 2, 3, 4].find(flags.get(this.SchemaFlag)) == null)
     {
         state.issue = "Saved by a newer or unsupported " + this.Name + " schema; retained without changes.";
         return;

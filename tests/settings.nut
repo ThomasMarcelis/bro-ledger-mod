@@ -1,7 +1,7 @@
 // Real pinned MSU settings classes; only other systems, disk and JS transport are doubles.
 try
 {
-    ::Math <- {ceil=ceil,floor=floor,max=@(a,b) a.tointeger()>b.tointeger()?a.tointeger():b.tointeger(),
+    ::Math <- {ceil=ceil,floor=floor,round=@(v) floor(v+0.5),max=@(a,b) a.tointeger()>b.tointeger()?a.tointeger():b.tointeger(),
         min=@(a,b) a.tointeger()<b.tointeger()?a.tointeger():b.tointeger(),maxf=@(a,b) a>b?a:b,minf=@(a,b) a<b?a:b};
     ::MSU <- {Class={},System={},SystemID={ModSettings="ModSettings",Tooltips="Tooltips"},
         requireTable=function(v){if(typeof v!="table") throw "Expected table";},
@@ -24,15 +24,17 @@ try
     ::MSU.System.ModSettings <- ::MSU.Class.ModSettingsSystem();
     ::MSU.System.ModSettings.Screen={updateSettingInJS=function(mod,id,value){}};
     ::getModSetting <- @(mod,id) ::MSU.System.ModSettings.getPanel(mod).getSetting(id);
-    local hooks={},registration=null;
+    local hooks={},registration=null,queued=null;
     ::Hooks <- {
         register=function(id,version,name) {
             registration={id=id,version=version,name=name};
-            return {require=function(...){},queue=function(order,fn){fn();},hook=function(path,fn){hooks[path]<-fn;}};
+            return {require=function(...){},queue=function(order,fn){queued=fn;},hook=function(path,fn){hooks[path]<-fn;}};
         },registerLateJS=function(path){},registerCSS=function(path){}
     };
     ::include <- @(path) dofile(path+".nut");
     dofile("scripts/!mods_preload/mod_bro_ledger.nut");
+    if(queued==null || "readLibrary" in ::BroLedger) throw "Modules must load in the queued startup callback";
+    queued.call(getroottable());
     local B=::BroLedger,system=::MSU.System.ModSettings,settings=B.Mod.ModSettings;
     function check(v,message) {if(!v) throw message;}
     function same(a,b) {
@@ -46,8 +48,26 @@ try
     }
     local count=0;
     function test(name,fn){try {fn();} catch(e) {throw name+": "+e;} count++;print("PASS "+name+"\n");}
+    test("queued_startup_refresh_and_evaluate_empty_library",function(){
+        dofile("tests/fixtures.nut");
+        local actor=actorFixture(),flags={has=@(key) false,set=function(...){throw "Startup wrote library";}};
+        actor.getID<-@() 7;actor.getName<-@() "Test";actor.isGuest<-@() false;actor.isAlive<-@() true;
+        ::World.Flags<-flags;::World.getPlayerRoster<-@() {getAll=@() [actor]};
+        ::Const.Perks<-{Perks=[]};
+        local screen={m={},show=function(){},hide=function(){},destroy=function(){}};
+        local show=screen.show;
+        hooks["scripts/ui/screens/character/character_screen"](screen);
+        screen.show=screen.show(show);screen.show();
+        foreach(seq,action in ["refresh","evaluate"]) {
+            local r=screen.onBroLedger({action=action,actor=7,seq=seq});
+            check(!("error" in r),"startup "+action+" failed: "+("error" in r ? r.error : ""));
+            check(r.library.len()==0 && r.builds.len()==0 && r.libraryIssue==null && r.plan==null && r.newBuildID=="user_1",
+                "startup did not return the empty editable library");
+        }
+        check(B.actorState(actor).revision==0,"startup changed actor intent");
+    });
     test("msu_native_tooltips_dispatch",function(){
-        foreach(id in ["now","stats","potential","expected","targets","talents","weapons","dodge","nimble","battleForged"])
+        foreach(id in ["stats","potential","expected","targets","dodge","nimble","battleForged"])
         {
             local data=::MSU.System.Tooltips.getTooltip(B.ID,id).getUIData({});
             check(data.len()==2 && data[0].type=="title" && data[1].type=="description" && data[1].text.len()>0,"native tooltip dispatch failed: "+id);
@@ -57,17 +77,17 @@ try
         check(registration.id=="mod_bro_ledger" && registration.version==B.Version && registration.name==B.Name,"registration changed save identity or disagrees with mod metadata");
         local panel=system.getUIData()[B.ID];
         check(panel.name==B.Name && !panel.hidden && panel.pages.len()==1 && panel.pages[0].name==B.Name,"settings page missing/hidden/misnamed");
-        check(panel.pages[0].settings.len()==4,"expected exactly four settings");
-        foreach(id in ["Enabled","PerkHighlights","LevelUpRecommendations","EquipmentAdvice"])
+        check(panel.pages[0].settings.len()==3,"expected exactly three settings");
+        foreach(id in ["Enabled","PerkHighlights","LevelUpRecommendations"])
             check(settings.getSetting(id).getValue() && settings.getSetting(id).getPersistence(),"default or persistence missing: "+id);
         check(writes==0,"registration overwrote persistent preferences");
-        system.updateSettingsFromJS({[B.ID]={EquipmentAdvice={type="bool",value=false}}});
-        check(writes==1 && disk.ModSettings[B.ID].EquipmentAdvice==false,"native settings update did not persist");
+        system.updateSettingsFromJS({[B.ID]={PerkHighlights={type="bool",value=false}}});
+        check(writes==1 && disk.ModSettings[B.ID].PerkHighlights==false,"native settings update did not persist");
         // Fresh registration defaults then MSU import, as on next game startup.
         B.Mod=::MSU.Class.Mod(B.ID,B.Version,B.Name);B.registerSettings();
-        check(B.Mod.ModSettings.getSetting("EquipmentAdvice").getValue(),"registration default changed");
+        check(B.Mod.ModSettings.getSetting("PerkHighlights").getValue(),"registration default changed");
         system.importPersistentSettings();settings=B.Mod.ModSettings;
-        check(!B.readSettings().EquipmentAdvice && B.readSettings().Enabled && writes==1,"MSU import lost value or rewrote storage");
+        check(!B.readSettings().PerkHighlights && B.readSettings().Enabled && writes==1,"MSU import lost value or rewrote storage");
     });
     test("msu_campaign_settings_restore_without_rewriting_startup_preferences",function(){
         local campaign={};
@@ -88,13 +108,14 @@ try
     hooks["scripts/ui/screens/character/character_screen"](screen);
     screen.show=screen.show(originalShow);screen.hide=screen.hide(originalHide);screen.destroy=screen.destroy(originalDestroy);
     local actor={m={},getID=@() 7,getName=@() "Test brother",isPerkUnlockable=@(id) true};
-    local state=B.actorState(actor),legacy=B.makePlan(B.findBuild("forged_neutral_axe"));
+    local state=B.actorState(actor),legacy={schema=4,revision=5,enabled=true,build="user_1",label="Saved",targets={},preferredTargets={},route=[],flex=[],weaponTags=[],playstyleTags=[]};
+    ::World <- {Flags={has=@(k) false}};B.perkDefs=@() {};
     legacy.revision=1;state.plan=legacy;
     B.ownedActor=function(id){if(id!=7) throw "Wrong actor";return actor;};
     local view=B.view,reads=0;
-    B.view=function(actor,catalog,options){reads++;return {actor=7,revision=state.revision,plan=B.copy(state.plan)};};
+    B.view=function(actor,catalog,options,library=null){reads++;return {actor=7,revision=state.revision,plan=B.copy(state.plan)};};
     test("settings_close_reopen_global_disable_preserves_old_intent",function(){
-        settings.getSetting("EquipmentAdvice").set(true);
+        settings.getSetting("PerkHighlights").set(true);
         screen.show();local first=screen.m.BroLedgerContext,original=B.copy(state);
         settings.getSetting("Enabled").set(false);
         check(first.settings.Enabled,"setting mutated open-screen snapshot");

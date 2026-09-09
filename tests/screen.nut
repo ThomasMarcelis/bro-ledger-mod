@@ -1,164 +1,132 @@
-local B=::BroLedger, cases={}, defs=dofile("tests/perk_unlocks.nut");
-
+local B=::BroLedger,cases={},defs=dofile("tests/perk_unlocks.nut");
+function commandFixture() {
+    local a={m={},getID=@() 7,getName=@() "Test",isPerkUnlockable=@(id) true},flags=libraryFlags();
+    ::World<-{Flags=flags};B.ownedActor=@(id) id==7?a:null;B.readActor=@(actor) fixture();B.perkDefs=@() defs;
+    local screen={m={BroLedgerContext={epoch=91,seq=-1,actor=null,settings={Enabled=true,LevelUpRecommendations=false,PerkHighlights=true}}}};
+    return {actor=a,flags=flags,screen=screen,seq=0,request=function(action,extra={}) {
+        local d={action=action,actor=7,seq=++this.seq,epoch=91,revision=B.actorState(a).revision};
+        foreach(k,v in extra)d[k]<-v;return B.command(screen,d);
+    }};
+}
+cases.empty_startup_uses_production_actor_library_and_view <- function() {
+    local a=actorFixture(),flags=libraryFlags();
+    a.getID<-@() 7;a.getName<-@() "Test";a.isGuest<-@() false;a.isAlive<-@() true;
+    ::World.Flags<-flags;::World.getPlayerRoster<-@() {getAll=@() [a]};
+    ::Const.Perks<-{Perks=[[{ID="perk.colossus",Unlocks=0,Name="Colossus",Icon="ui/perks/perk_01.png"}]]};
+    local screen={m={BroLedgerContext={epoch=91,seq=-1,actor=null,
+        settings={Enabled=true,LevelUpRecommendations=true,PerkHighlights=true}}}};
+    foreach(seq,action in ["refresh","evaluate"]) {
+        local r=B.command(screen,{action=action,actor=7,seq=seq});
+        check(!("error" in r),"initial "+action+" failed: "+("error" in r?r.error:""));
+        check(r.library.len()==0 && r.builds.len()==0 && r.libraryIssue==null && r.plan==null && r.newBuildID=="user_1",
+            "empty campaign did not reach creator-ready response");
+    }
+    check(!flags.has(B.LibraryFlag) && B.actorState(a).revision==0,"initial reads wrote campaign or actor intent");
+    local has=flags.has;flags.has=function(k){throw "Diagnostic simulated library read failure";};
+    local r=B.command(screen,{action="refresh",actor=7,seq=2});
+    check("error" in r && screen.m.BroLedgerContext.seq==1,"failed read invented success or authority");
+    flags.has=has;r=B.command(screen,{action="evaluate",actor=7,seq=3});
+    check(!("error" in r) && r.library.len()==0 && !flags.has(B.LibraryFlag),"retry did not recover empty library");
+};
+cases.create_edit_track_delete_disabled_continuity <- function() {
+    local f=commandFixture();check(!("error" in f.request("refresh")),"refresh failed");
+    local b=userBuild(),r=f.request("saveBuild",{definition=b,create=true});check(!("error" in r)&&r.builds.len()==1,"creation failed");
+    r=f.request("track",{build=b.id});check(!("error" in r)&&r.plan.label==b.label,"tracking failed");
+    local saved=B.copy(B.actorState(f.actor).plan);b.label="Changed";b.preferred.matk=99;
+    r=f.request("saveBuild",{definition=b,create=false});check(!("error" in r)&&same(saved,B.actorState(f.actor).plan),"edit changed tracked snapshot");
+    r=f.request("deleteBuild",{build=b.id});check(!("error" in r)&&r.builds.len()==0&&same(saved,B.actorState(f.actor).plan),"delete lost plan");
+    check(!f.request("enabled",{enabled=false}).plan.enabled,"disable failed");
+    check(f.request("enabled",{enabled=true}).plan.enabled&&same(saved,B.actorState(f.actor).plan),"reenable replaced intent");
+};
+cases.import_export_and_failure_rollbacks <- function() {
+    local f=commandFixture();f.request("evaluate");local b=userBuild(),wire=B.encodeBuilds([b],defs);
+    check(!("error" in f.request("import",{text=wire,policy="reject"})),"import failed");
+    local original=f.flags.get(B.LibraryFlag),before=B.copy(B.actorState(f.actor));
+    check("error" in f.request("import",{text=wire,policy="reject"}),"duplicate silently overwrote");
+    check(original==f.flags.get(B.LibraryFlag)&&same(before,B.actorState(f.actor)),"rejected import changed owner");
+    check(f.request("export",{build=b.id}).share==wire&&f.request("export",{build=null}).share==wire,"single/bulk export changed");
+    B.view=function(...){throw "read failed";};
+    check("error" in f.request("deleteBuild",{build=b.id}),"read failure ignored");
+    check(original==f.flags.get(B.LibraryFlag)&&same(before,B.actorState(f.actor)),"read failure partially deleted");
+};
+cases.persistence_set_failure_keeps_plan_and_revision <- function() {
+    local f=commandFixture();f.request("evaluate");local before=B.copy(B.actorState(f.actor));
+    f.flags.set=function(k,v){throw "storage write rejected";};
+    check("error" in f.request("saveBuild",{definition=userBuild(),create=true}),"write failure ignored");
+    check(!f.flags.has(B.LibraryFlag)&&same(before,B.actorState(f.actor)),"write failure changed owner");
+};
+cases.first_block_import_single_bulk_and_notice <- function() {
+    local a=userBuild(),b=userBuild("user_2");b.label="Second";
+    local different=B.encodeBuilds([b],defs);
+    foreach(builds in [[a],[a,b]]) {
+        local wire=B.encodeBuilds(builds,defs);
+        foreach(suffix in ["",wire,wire.slice(0,wire.len()-1),different+format("%c",0)+"junk"]) {
+            local f=commandFixture();f.request("evaluate");
+            local r=f.request("import",{text=wire+suffix,policy="reject"});
+            check(!("error" in r) && f.flags.get(B.LibraryFlag)==wire,"first declared block was not imported exactly");
+            check(("notice" in r)==(suffix!=""),"notice did not match ignored bytes");
+            if(suffix!="") check(r.notice=="Extra text after the first build block was ignored.","notice missing from successful reply");
+        }
+    }
+    local f=commandFixture(),wire=B.encodeBuilds([a],defs);f.request("evaluate");
+    f.request("import",{text=wire,policy="reject"});f.request("track",{build=a.id});
+    local plan=B.copy(B.actorState(f.actor).plan),r=f.request("import",{text=wire+different,policy="skip"});
+    check(!("error" in r) && "notice" in r && f.flags.get(B.LibraryFlag)==wire,"skip imported excess or suppressed notice");
+    r=f.request("import",{text=wire+different,policy="copy"});
+    check(!("error" in r) && r.library.len()==2 && same(plan,B.actorState(f.actor).plan),"copy policy or tracked snapshot changed");
+};
+cases.invalid_first_block_import_is_atomic <- function() {
+    local f=commandFixture();f.request("evaluate");local wire=B.encodeBuilds([userBuild()],defs);
+    f.request("import",{text=wire,policy="reject"});f.request("track",{build="user_1"});
+    local original=f.flags.get(B.LibraryFlag),before=B.copy(B.actorState(f.actor)),context=B.copy(f.screen.m.BroLedgerContext);
+    local at=wire.find("perk.colossus"),illegal=wire.slice(0,at)+"perk.invalidx"+wire.slice(at+13),oversized=wire;
+    while(oversized.len()<=B.ShareLimit) oversized+=wire;
+    local writes=0;f.flags.set=function(k,v){writes++;};
+    foreach(source in ["BL1|1:x"+wire,wire.slice(0,wire.len()-1),illegal+wire,"BL1|1:2"+wire.slice(7)+wire.slice(7),oversized]) {
+        local r=f.request("import",{text=source,policy="copy"});
+        check("error" in r && !("notice" in r),"invalid first block was salvaged or reported success");
+        check(writes==0 && original==f.flags.get(B.LibraryFlag) && same(before,B.actorState(f.actor)) &&
+            same(context,f.screen.m.BroLedgerContext),"invalid first block changed library, intent or authority");
+    }
+    check("error" in f.request("import",{text=wire+wire,policy="reject"}) && writes==0,"duplicate rejection weakened");
+};
+cases.first_block_import_keeps_saved_library_strict <- function() {
+    local wire=B.encodeBuilds([userBuild()],defs);
+    foreach(suffix in [wire,"junk",format("%c",0)]) {
+        local damaged=wire+suffix,f=commandFixture();f.flags.set(B.LibraryFlag,damaged);
+        check(rejects(@() B.decodeBuilds(damaged,defs)),"default decoder accepted trailing bytes");
+        local read=B.readLibrary(f.flags,defs);
+        check(read.issue!=null && read.issue.find("Diagnostic 0.4.3-d1")!=null && read.token==damaged && read.builds.len()==0,
+            "saved malformed library lost strict validation or diagnostic");
+        check(rejects(@() B.writeLibrary(f.flags,[],defs)) && f.flags.get(B.LibraryFlag)==damaged,"damaged saved bytes overwritten");
+        f.request("evaluate");
+        check("error" in f.request("import",{text=wire,policy="skip"}) && f.flags.get(B.LibraryFlag)==damaged,"import repaired damaged saved library");
+    }
+};
+cases.stale_actor_epoch_library_and_revision <- function() {
+    local f=commandFixture();f.request("evaluate");f.request("saveBuild",{definition=userBuild(),create=true});
+    foreach(extra in [{actor=8},{epoch=90},{revision=0},{seq=0}]) {
+        extra.build<-"user_1";check("error" in f.request("track",extra),"stale callback accepted");
+    }
+    f.flags.set(B.LibraryFlag,B.encodeBuilds([],defs));check("error" in f.request("track",{build="user_1"}),"stale library selection accepted");
+    f.screen.m.BroLedgerContext=null;check("error" in f.request("refresh"),"closed screen accepted request");
+};
+cases.future_schema_global_disable_and_locked_perks <- function() {
+    local f=commandFixture();f.request("evaluate");f.request("saveBuild",{definition=userBuild(),create=true});
+    B.actorState(f.actor).issue="future schema retained";
+    check("error" in f.request("track",{build="user_1"}),"future plan overwritten");
+    B.actorState(f.actor).issue=null;f.actor.isPerkUnlockable=@(id) false;
+    local r=f.request("track",{build="user_1"});check(r.plan.route.next==null,"locked native perk highlighted next");
+    local before=B.copy(B.actorState(f.actor));f.screen.m.BroLedgerContext.settings.Enabled=false;
+    check(f.request("refresh").plan==null,"global disable exposed plan");
+    foreach(action in ["track","saveBuild","deleteBuild","import","enabled"])check("error" in f.request(action),"disabled mutation accepted");
+    check(same(before,B.actorState(f.actor)),"disable changed intent");
+};
 cases.stock_offer_isolation <- function() {
     local actor={m={},getLevel=@() 3,getLevelUps=@() 1},dto={levelUp={}};
-    foreach (k,fields in B.Fields) dto.levelUp[fields[1]+"Increase"]<-2;
+    foreach(k,fields in B.Fields)dto.levelUp[fields[1]+"Increase"]<-2;
     B.captureOffer(actor,dto);dto.levelUp.hitpointsIncrease=4;
     check(B.actorState(actor).offer.values.hp==2,"held stock payload by reference");
     B.captureOffer(actor,{levelUp=null});check(B.actorState(actor).offer==null,"stale offer retained");
 };
-
-cases.command_rejects_stale_and_invalid_writes <- function() {
-    local a={m={},getID=@() 7};local screen={m={BroLedgerContext={epoch=91,seq=-1,actor=null,settings={Enabled=true}}}};
-    B.ownedActor=function(id){return id==7 ? a : null;};
-    B.readActor=function(actor){return fixture();};
-    B.view=function(actor,catalog,settings){return {actor=7,revision=B.actorState(actor).revision};};
-    local r=B.command(screen,{action="refresh",actor=7,seq=1});
-    check(!("error" in r),"cannot refresh");
-    check("error" in B.command(screen,{action="track",actor=7,seq=2,epoch=90,revision=0,build="forged_neutral_axe"}),"old campaign epoch accepted");
-    r=B.command(screen,{action="track",actor=7,seq=3,epoch=91,revision=0,build="forged_neutral_axe"});
-    check(!("error" in r) && B.actorState(a).plan.build=="forged_neutral_axe","deliberate track failed");
-    check("error" in B.command(screen,{action="enabled",actor=7,seq=4,epoch=91,revision=0,enabled=false}),"late disable edited newer intent");
-    r=B.command(screen,{action="enabled",actor=7,seq=5,epoch=91,revision=1,enabled=false});
-    check(!("error" in r) && !B.actorState(a).plan.enabled,"disable failed");
-    check("error" in B.command(screen,{action="track",actor=9,seq=6,epoch=91,revision=0,build="forged_neutral_axe"}),"unowned actor accepted");
-    screen.m.BroLedgerContext=null;
-    check("error" in B.command(screen,{action="track",actor=7,seq=7,epoch=91,revision=2,build="fencer"}),"closed screen accepted a write");
-};
-
-cases.track_commits_only_the_reviewed_current_candidate <- function() {
-    local b=B.findBuild("nimble_2h_axe"),s=calibratedBro(b),a={m={},getID=@() 7};
-    s.perks.clear();foreach(id in b.route) if(id!="perk.mastery.axe") s.perks[id]<-true;
-    s.perks["perk.mastery.mace"]<-true;s.spent=10;s.free=0;
-    local old=B.makePlan(b);old.revision=1;old.enabled=false;B.actorState(a).plan=old;
-    local preview=B.candidatePlan(b,s);
-    check(B.actorState(a).plan==old && old.route.find("perk.mastery.axe")!=null,"preview changed old metadata");
-    B.readActor=@(actor) s;B.ownedActor=@(id) id==7 ? a : null;
-    B.view=@(actor,catalog,settings) {actor=7,revision=B.actorState(actor).revision};
-    local screen={m={BroLedgerContext={actor=7,epoch=31,seq=0,settings={Enabled=true}}}};
-    local result=B.command(screen,{actor=7,epoch=31,seq=1,revision=0,action="track",build=b.id});
-    local chosen=B.actorState(a).plan;
-    check(!("error" in result) && chosen.revision==3 && B.validPlan(chosen),"deliberate Track failed");
-    foreach(i,id in preview.route) check(chosen.route[i]==id,"Track differed from candidate preview");
-    check(old.revision==1 && !old.enabled && old.route.find("perk.mastery.axe")!=null,"old plan object was edited");
-    check(s.spent==10 && s.free==0 && !("perk.mastery.axe" in s.perks),"Track spent or refunded gameplay points");
-};
-
-cases.reader_view_stored_offer <- function() {
-    local a=actorFixture(),b=B.findBuild("fencer"),p=B.makePlan(b);
-    a.level=12;a.pending=2;a.free=0;a.spent=10;
-    a.getID<-@() 7;a.getName<-@() "Stored offer fixture";a.isPerkUnlockable<-@(id) true;
-    a.natural={Hitpoints=65,Bravery=39,Stamina=103,Initiative=159,MeleeSkill=88,RangedSkill=30,MeleeDefense=30,RangedDefense=0};
-    foreach(id in b.route) if(id!="perk.gifted") a.skills.push(skill(id,1));
-    a.skills.push(skill("perk.footwork",1));
-    local offer={hp=4,resolve=2,fatigue=2,initiative=3,matk=1,mdef=3,ratk=2,rdef=2},dto={levelUp={}};
-    foreach(k,v in offer) dto.levelUp[B.Fields[k][1]+"Increase"]<-v;
-    B.captureOffer(a,dto);B.actorState(a).plan=p;B.perkDefs=@() defs;
-    local s=B.readActor(a),view=B.view(a,false,{EquipmentAdvice=false,LevelUpRecommendations=true});
-    check(s.normalRows==1 && s.veteranRows==1 && s.futurePerks==0 && s.growthKnown,"stored row partition changed");
-    check(view.offer.picks.find("hp")!=null && view.offer.picks.find("fatigue")!=null && view.offer.picks.find("matk")!=null,
-        "unaffordable Gifted displaced essential Melee skill from current offer");
-    foreach(k in view.offer.picks) s.stats[k]+=offer[k];s.normalRows--;
-    check(B.feasibility(B.forPlan(s,p),p.targets,"mean").feasible,"next veteran row cannot complete advised minima");
-    check(B.actorState(a).plan==p && p.route.find("perk.gifted")!=null && a.free==0 && a.pending==2,"offer rewrote saved intent or actor");
-};
-
-cases.failed_track_is_atomic <- function() {
-    local a={m={},getID=@() 7},state=B.actorState(a),old=B.makePlan(B.findBuild("nimble_2h_axe"));
-    old.revision=1;old.enabled=false;state.plan=old;state.revision=17;
-    local screen={m={BroLedgerContext={actor=7,epoch=31,seq=0,settings={Enabled=true}}}};
-    B.readActor=@(actor) fixture();B.ownedActor=@(id) a;
-    B.view=function(actor,catalog,settings){throw "injected projection failure";};
-    ::logError <- function(message) {};
-    local result=B.command(screen,{actor=7,epoch=31,seq=1,revision=17,action="track",build="fencer"});
-    local intact=state.plan==old && state.revision==17 && !old.enabled && old.revision==1;
-    local enabled=B.command(screen,{actor=7,epoch=31,seq=2,revision=17,action="enabled",enabled=true});
-    local enabledIntact=state.plan==old && state.revision==17 && !old.enabled;
-    B.view=@(actor,catalog,settings) {actor=7,revision=B.actorState(actor).revision};
-    local retry=B.command(screen,{actor=7,epoch=31,seq=3,revision=17,action="track",build="fencer"});
-    check("error" in result && intact,"failed Track changed plan or revision");
-    check("error" in enabled && enabledIntact,"failed enable changed dormant intent");
-    check(!("error" in retry) && state.plan.build=="fencer" && state.revision==18,"retry cannot commit exactly once after failed Track");
-    check(!old.enabled && old.revision==1 && old.build=="nimble_2h_axe","Track mutated inherited plan object");
-};
-
-cases.view_refresh_and_disabled_contract <- function() {
-    local a=actorFixture(),p=B.makePlan(B.findBuild("tempo_spear"));
-    a.level=7;a.pending=0;a.spent=1;a.free=5;
-    a.getID<-@() 7;a.getName<-@() "Manual flex";a.isPerkUnlockable<-@(id) true;
-    a.skills.push(skill("perk.dodge",1));
-    a.skills.push(skill("injury.missing_hand",4));a.skills.push(skill("trait.tiny",2));
-    B.perkDefs=@() defs;B.actorState(a).plan=p;
-    local settings={EquipmentAdvice=false,LevelUpRecommendations=false},v=B.view(a,false,settings);
-    check(v.plan.equipment==null && v.plan.effects.dodge.value==9 && !v.plan.effects.nimble.owned,
-        "equipment toggle hid current effects or planned Nimble became active");
-    check(v.warnings.len()==1 && v.notes.len()==1,"material equipment warning lost with narrative removal");
-    a.getInitiative=@() 40;v=B.view(a,false,settings);
-    check(v.plan.effects.dodge.value==6,"refresh retained stale equipment/fatigue value");
-    p.enabled=false;v=B.view(a,false,settings);
-    check(!("effects" in v.plan) && !v.plan.enabled,"effects revived disabled plan");
-    B.actorState(a).plan=null;check(B.view(a,false,settings).plan==null,"effects created missing plan");
-};
-cases.feature_gates_skip_advice_without_changing_grades_or_intent <- function() {
-    local actor={m={},getID=@() 7,getName=@() "Feature gates",isPerkUnlockable=@(id) true};
-    local state=B.actorState(actor),source=fixture();
-    state.plan=B.makePlan(B.findBuild("forged_neutral_axe"));
-    source.level=3;source.pending=1;
-    foreach(k in B.Stats) source.stats[k]=60;
-    local options={PerkHighlights=true,LevelUpRecommendations=true,EquipmentAdvice=true};
-    B.readActor=@(actor) source;B.perkDefs=@() defs;
-    local equipment=0,offers=0;
-    B.readEquipment=function(actor){equipment++;return {};};B.equipmentAdvice=@(g,p,perks) {capacity=50};
-    B.adviseOffer=function(s,p,o){offers++;return {picks=["hp","matk","mdef"]};};
-    state.offer={level=3,pending=1,values={}};
-    local before=B.copy(state),on=B.view(actor,true,options);
-    check(equipment==1 && offers==1 && on.plan.equipment!=null && on.offer!=null,"default feature missing");
-    foreach(id in ["PerkHighlights","LevelUpRecommendations","EquipmentAdvice"]) options[id]=false;
-    local off=B.view(actor,true,options);
-    check(equipment==1 && offers==1 && off.plan.equipment==null && off.offer==null,"disabled advice still calculated");
-    check(same(on.builds,off.builds) && same(state,before),"feature toggle changed grade/strategy or saved intent");
-    options.LevelUpRecommendations=true;B.view(actor,false,options);
-    check(offers==2 && equipment==1,"recommendation toggle affected equipment");
-    options.LevelUpRecommendations=false;options.EquipmentAdvice=true;
-    B.view(actor,false,options);check(offers==2 && equipment==2,"equipment toggle affected recommendations");
-};
-
-cases.catalog_preview_identifies_saved_build_without_replacing_intent <- function() {
-    local actor={m={},getID=@() 7,getName=@() "Saved preview",isPerkUnlockable=@(id) true};
-    local state=B.actorState(actor),source=fixture(),options={EquipmentAdvice=false,LevelUpRecommendations=false};
-    state.plan=B.makePlan(B.findBuild("forged_neutral_axe"));
-    B.readActor=@(actor) source;B.perkDefs=@() defs;
-
-    local before=B.copy(state.plan),active=B.view(actor,true,options);
-    check("build" in active.plan && active.plan.build==before.build,"saved preview cannot identify its catalog row");
-    check(same(state.plan,before),"catalog preview replaced saved route or revision");
-    state.plan.enabled=false;before=B.copy(state.plan);
-    local dormant=B.view(actor,true,options);
-    check(dormant.plan.build==before.build && !dormant.plan.enabled,"disabled preview lost saved identity");
-    check(same(state.plan,before),"disabled preview changed dormant intent");
-    state.issue="Future schema";
-    check(B.view(actor,true,options).plan==null && same(state.plan,before),"read-only schema exposed or changed saved intent");
-};
-
-cases.view_projects_all_talents_per_actor_without_saving_them <- function() {
-    local a={m={},getID=@() 17,getName=@() "A",isPerkUnlockable=@(id) true};
-    local b={m={},getID=@() 18,getName=@() "B",isPerkUnlockable=@(id) true};
-    local source=fixture();source.free=0;source.futurePerks=10;
-    B.perkDefs=@() defs;
-    local talents=[0,1,2,3,null,3,2,1];
-    foreach(i,k in B.Stats) {source.stats[k]=60;source.stars[k]=talents[i];}
-    local other=B.copy(source);foreach(k in B.Stats) other.stars[k]=0;
-    B.readActor=@(actor) actor.getID()==17 ? source : other;
-    local state=B.actorState(a);state.plan=B.makePlan(B.findBuild("nimble_2h_axe"));
-    local before=B.copy(state),raw=B.copy(source),options={EquipmentAdvice=false,LevelUpRecommendations=false};
-    foreach(catalog in [true,false]) {
-        local view=B.view(a,catalog,options);
-        check("stars" in view && view.stars.len()==8 && same(view.stars,source.stars),"view dropped or remapped talents");
-        local next=B.view(b,catalog,options);
-        check(same(next.stars,other.stars) && same(view.stars,raw.stars),"actor switch leaked talents");
-    }
-    check(same(state,before) && same(source,raw),"talent display changed intent or source payload");
-
-};
-
 return cases;

@@ -17,25 +17,6 @@ var BroLedgerUI = (function () {
     function button(parent, label, action) {
         return $('<div class="bl-button"/>').appendTo(parent).createTextButton(safe(label), action, '', 1);
     }
-    function scroll(parent) {
-        return parent.createList(8, 'bl-scroll', true).findListScrollContainer();
-    }
-    function disclosure(parent, label) {
-        var section = $('<div class="bl-disclosure"/>').appendTo(parent);
-        var toggle = $('<div class="bl-disclosure-toggle text-font-normal" role="button" tabindex="0"/>')
-            .attr('aria-expanded', 'false').text('+ ' + label).appendTo(section);
-        var content = $('<div class="bl-disclosure-content"/>').hide().appendTo(section), open = false;
-        function change() {
-            open = !open;
-            toggle.attr('aria-expanded', open ? 'true' : 'false').text((open ? '- ' : '+ ') + label);
-            content.toggle(open);
-            section.closest('.bl-scroll').trigger('update', true);
-        }
-        toggle.on('click', change).on('keydown', function (event) {
-            if (event.which === 13 || event.which === 32) { event.preventDefault(); change(); }
-        });
-        return content;
-    }
     function tooltip(node, id) {
         node.addClass('bl-tooltip').bindTooltip({contentType: 'msu-generic', modId: 'mod_bro_ledger', elementId: id});
     }
@@ -54,6 +35,7 @@ var BroLedgerUI = (function () {
         this.actor = null;
         this.seq = ++sequence;
         this.data = null;
+        this.enabled = null;
         this.visible = false;
         this.popup = null;
         this.panel = null;
@@ -68,23 +50,31 @@ var BroLedgerUI = (function () {
         if (!this.visible || this.actor === null || this.screen.mSQHandle === null) return;
         // Rendered controls can survive a refresh, but an old revision cannot authorize a write.
         if (action !== 'refresh' && action !== 'evaluate' && !this.data) return;
-        var self = this, actor = this.actor, seq = ++sequence;
+        var self = this, actor = this.actor, seq = ++sequence, previous = this.data, requestPopup = this.popup;
         var request = {action: action, actor: actor, seq: seq};
         if (this.data) { request.epoch = this.data.epoch; request.revision = this.data.revision; }
         Object.keys(extra || {}).forEach(function (k) { request[k] = extra[k]; });
         this.seq = seq;
         this.data = null;
-        SQ.call(this.screen.mSQHandle, 'onBroLedger', request, function (reply) {
+        var received = false, receive = function (reply) {
+            received = true;
             if (!self.visible || self.seq !== seq || self.actor !== actor) return;
             if (!reply || reply.error) {
+                self.data = previous;
                 self.showError(reply && reply.error ? reply.error : 'Planner did not receive a response.');
                 return;
             }
             if (reply.actor !== actor || reply.seq !== seq) return;
             self.data = reply;
+            self.enabled = reply.settings.Enabled;
             self.render();
-            if (done) done(reply);
-        });
+            if (done && self.popup === requestPopup) done(reply);
+        };
+        try { SQ.call(this.screen.mSQHandle, 'onBroLedger', request, receive); }
+        catch (error) {
+            if (received) throw error;
+            receive({error: 'Planner request failed: ' + error});
+        }
     };
     Controller.prototype.select = function () {
         var selected = this.screen.mDataSource.getSelectedBrother();
@@ -95,18 +85,19 @@ var BroLedgerUI = (function () {
         this.request('refresh');
     };
     Controller.prototype.showError = function (message) {
-        this.data = null;
-        this.clearMarks();
-        if (this.popup) {
-            var details = this.popup.find('.bl-detail-content');
-            disposeTooltips(details); details.empty();
-            text(details, message).addClass('bl-warning');
-            details.closest('.bl-scroll').trigger('update', true).trigger('scroll', {top: 0});
-            this.popup.findPopupDialogOkButton().enableButton(false);
-            var resume = this.popup.findPopupDialogButton('bl-resume-button');
-            if (resume) resume.enableButton(false);
+        if (this.enabled === false) return;
+        var self = this, actor = this.actor, seq = this.seq;
+        var parent=this.popup ? this.popup.findPopupDialogContentContainer() : this.panel;
+        parent.find('.bl-error').remove();
+        var error = $('<div class="bl-error bl-warning"/>').appendTo(parent);
+        text(error,message);
+        if (!this.popup) {
+            parent.show(); this.screen.mContainer.addClass('bl-with-plan');
+            if (!this.data || !this.data.plan || !this.data.plan.enabled || this.data.issue) parent.addClass('bl-failure');
+            button(error, 'Retry', function () {
+                if (self.visible && self.actor === actor && self.seq === seq) self.evaluate();
+            });
         }
-        else { disposeLists(this.panel); this.panel.show().empty(); text(this.panel, message); }
     };
     Controller.prototype.clearMarks = function () {
         this.screen.mContainer.find('.bl-route, .bl-optional').removeClass('bl-route bl-optional');
@@ -123,341 +114,284 @@ var BroLedgerUI = (function () {
                 plan.route.blocked.indexOf(perk.ID) !== -1) perk.Container.addClass('bl-route');
         }); });
     };
-    Controller.prototype.grades = function (parent, build) {
-        var grades = $('<div class="bl-grades text-font-normal"/>').appendTo(parent);
-        tooltip($('<span/>').text('Now ' + build.nowGrade).appendTo(grades), 'now');
-        tooltip($('<span/>').text('Potential ' + build.grade).appendTo(grades), 'potential');
-    };
+    function valueLabel(value) { return value == null ? '?' : String(Number(value.toFixed(2))); }
+    function scoreLabel(build) { return build.score == null ? 'Unrated' : valueLabel(build.score) + '/100'; }
+    function matches(build, weapon, style) {
+        return (weapon === 'All' || build.weaponTags.indexOf(weapon) !== -1) &&
+            (style === 'All' || build.playstyleTags.indexOf(style) !== -1);
+    }
     Controller.prototype.targets = function (parent, build, stars, compact) {
-        text(parent, 'Stat goals', true);
-        var horizon = build.projection.horizon;
-        function valueLabel(value) { return value == null ? '?' : String(Number(value.toFixed(2))); }
-        function attribute(node, key) {
-            node.addClass('bl-attribute').text(names[key]);
-            var talent = stars[key];
-            if (talent !== null) {
-                tooltip($('<img class="bl-talent"/>').attr('src', Path.GFX + 'ui/icons/talent_' + talent + '.png')
-                    .attr('alt', talent + ' talent star' + (talent === 1 ? '' : 's')).appendTo(node), 'talents');
-            } else tooltip($('<span class="bl-talent"/>').text('?').appendTo(node), 'talents');
-        }
-        function target(node, value, state, prefix) {
-            var label = state === 'none' ? '—' : valueLabel(value);
-            if (state === 'met' || state === 'grow') {
-                node.text(prefix || '');
-                $('<span aria-hidden="true"/>').addClass(state === 'met' ? 'bl-target-check' : 'bl-arrow bl-arrow-up').appendTo(node);
-                $('<span/>').text(label).appendTo(node);
-            } else node.text((prefix || '') + label);
-            tooltip(node.addClass('bl-target-' + state), 'targets');
-        }
-        function expected(node, row, prefix) {
-            tooltip(node.text((prefix || '') + valueLabel(row.expected) + (row.expectedShortfall ? ' !' : ''))
-                .addClass(row.expectedShortfall ? 'bl-warning' : ''), 'expected');
-        }
-        var body;
-        if (compact) {
-            tooltip(text(parent, 'Projected at level ' + horizon).addClass('bl-muted'), 'expected');
-            body = $('<div class="bl-stat-stack"/>').appendTo(parent);
-        } else {
-            var table = $('<table class="bl-targets"/>').appendTo(parent);
-            var header = $('<tr/>').appendTo($('<thead/>').appendTo(table));
-            [['Attribute', 'talents'], ['Now', 'stats'], ['Projected at level ' + horizon, 'expected'],
-                ['Minimum', 'targets'], ['Ideal', 'targets']].forEach(function (spec) {
-                var cell = $('<th scope="col"/>').text(spec[0]).appendTo(header);
-                if (spec[1] === 'expected') $('<div class="bl-muted"/>').text('Average rolls').appendTo(cell);
-                tooltip(cell, spec[1]);
-            });
-            body = $('<tbody/>').appendTo(table);
-        }
+        var table = $('<table class="bl-targets"/>').appendTo(parent);
+        var header = $('<tr/>').appendTo($('<thead/>').appendTo(table));
+        (compact ? ['Stat', 'Current', 'Ideal'] : ['Stat', 'Current', 'Potential', 'Min', 'Ideal']).forEach(function (label) {
+            $('<th/>').text(label).appendTo(header);
+        });
+        var body = $('<tbody/>').appendTo(table), short = {hp:'HP',resolve:'Res',fatigue:'Fat',initiative:'Init',matk:'MAtk',ratk:'RAtk',mdef:'MDef',rdef:'RDef'};
         build.statRows.forEach(function (row) {
-            if (compact) {
-                var item = $('<div class="bl-stat text-font-normal"/>').appendTo(body);
-                attribute($('<div/>').appendTo(item), row.key);
-                var values = $('<div class="bl-stat-values"/>').appendTo(item);
-                tooltip($('<span/>').text('Now ' + valueLabel(row.now)).appendTo(values), 'stats');
-                $('<span class="bl-arrow" aria-hidden="true"/>').appendTo(values);
-                expected($('<span/>').appendTo(values), row, 'L' + horizon + ' ');
-                var goals = $('<div class="bl-stat-goals"/>').appendTo(item);
-                target($('<span/>').appendTo(goals), row.minimum, row.minimumState, 'Min ');
-                target($('<span/>').appendTo(goals), row.ideal, row.idealState, 'Ideal ');
-            } else {
-                var tr = $('<tr/>').appendTo(body);
-                attribute($('<td/>').appendTo(tr), row.key);
-                $('<td/>').text(valueLabel(row.now)).appendTo(tr);
-                expected($('<td/>').appendTo(tr), row);
-                target($('<td/>').appendTo(tr), row.minimum, row.minimumState);
-                target($('<td/>').appendTo(tr), row.ideal, row.idealState);
+            var tr = $('<tr/>').appendTo(body);
+            $('<td/>').text(compact ? short[row.key] : names[row.key]).attr('title', names[row.key]).appendTo(tr);
+            tooltip($('<td/>').text(valueLabel(row.now)).appendTo(tr), 'stats');
+            if (!compact) {
+                tooltip($('<td/>').text(valueLabel(row.expected)).appendTo(tr), 'expected');
+                $('<td/>').text(row.minimum == null ? '—' : valueLabel(row.minimum)).appendTo(tr);
             }
+            tooltip($('<td/>').text(row.ideal == null ? '—' : valueLabel(row.ideal)).addClass('bl-target-' + row.idealState).appendTo(tr), 'targets');
         });
+        var joint = build.jointState === 'impossible' ? 'Goals compete: no joint maximum-roll allocation.' :
+            build.jointState === 'individual' ? 'Red goals exceed individual maximum rolls.' :
+            build.jointState === 'unknown' ? 'Growth or saved Ideal goals unknown.' : 'Goals share limited picks; actual rolls matter.';
+        text(parent, 'To L' + build.projection.horizon + ': ' + joint).addClass('bl-bound');
     };
-    Controller.prototype.allocation = function (parent, build) {
-        var content = disclosure(parent, 'Forecast allocation'), projection = build.projection;
-        if (!projection.known) { text(content, 'Unavailable').addClass('bl-muted'); return; }
-        build.statRows.forEach(function (row) {
-            var counts = projection.allocation[row.key];
-            text(content, names[row.key] + ': ' + counts[0] + (counts[0] === 1 ? ' pick' : ' picks') +
-                (counts[1] ? ' + ' + counts[1] + ' veteran' : '') + (counts[2] ? ' + Gifted' : ''));
+    Controller.prototype.perkOrder = function (parent, plan, defs, compact) {
+        text(parent, 'Creator order · blue = flex', true);
+        var route = $('<div class="bl-route-list"/>').toggleClass('bl-compact-route', !!compact).appendTo(parent);
+        (plan.order || []).forEach(function (id, i) {
+            var row = $('<div class="bl-route-item text-font-normal"/>').appendTo(route);
+            var label = perkName(id, defs);
+            if (compact && id.indexOf('perk.mastery.') === 0) {var key=id.split('.').pop();label=key.charAt(0).toUpperCase()+key.slice(1)+' M.';}
+            row.text((i + 1) + '. ' + label).attr('title', perkName(id, defs));
+            if (plan.route.acquired.indexOf(id) !== -1) row.addClass('bl-target-met');
+            else if (plan.flex.indexOf(id) !== -1) row.addClass('bl-flex-text');
         });
-    };
-    Controller.prototype.routeWarnings = function (parent, route, defs) {
-        if (route.offplan.length) text(parent, 'Already spent outside route: ' + perkList(route.offplan, defs)).addClass('bl-warning');
-        if (route.unknown.length) text(parent, 'Missing definitions: ' + perkList(route.unknown, defs)).addClass('bl-warning');
-        if (route.blocked.length) text(parent, 'Tier blocked: ' + perkList(route.blocked, defs)).addClass('bl-warning');
-        if (route.conflicts.length) text(parent, 'Outside this armour role: ' + perkList(route.conflicts, defs)).addClass('bl-warning');
-        if (!route.feasible) text(parent, 'This route cannot currently be completed; check perk budget, tiers and role conflicts.').addClass('bl-warning');
+        if (!plan.route.feasible) text(parent, 'Route blocked: unlocks, spent points or missing perks.').addClass('bl-warning bl-route-status');
     };
     Controller.prototype.effects = function (parent, effects) {
-        text(parent, 'Current effects', true);
-        [['dodge', 'Dodge', 'Melee & ranged defence'], ['nimble', 'Nimble', 'HP damage reduction'],
-            ['battleForged', 'Battle Forged', 'Armour damage reduction']].forEach(function (spec) {
+        [['dodge','Dodge','Def'],['nimble','Nimble','HP DR'],['battleForged','Forged','Armour DR']].forEach(function (spec) {
+            var effect = effects[spec[0]], value = !effect.owned ? '—' : effect.value === null ? '?' :
+                spec[0] === 'dodge' ? '+' + effect.value : Number(effect.value.toFixed(1)) + '%';
             var row = $('<div class="bl-effect text-font-normal"/>').appendTo(parent);
-            var effect = effects[spec[0]], value = 'Unknown';
-            if (!effect.owned) value = 'Not learned';
-            else if (effect.value !== null)
-                value = spec[0] === 'dodge' ? '+' + effect.value : Number(effect.value.toFixed(1)) + '%';
-            $('<span class="bl-effect-value"/>').text(value)
-                .addClass(!effect.owned ? 'bl-muted' : '').appendTo(row);
-            tooltip($('<span/>').text(spec[1]).appendTo(row), spec[0]);
-            $('<div class="bl-effect-kind bl-muted"/>').text(spec[2]).appendTo(row);
-        });
-    };
-    Controller.prototype.weaponComparisons = function (parent, comparisons) {
-        if (!comparisons) return;
-        var content = disclosure(parent, 'When to switch from a spear');
-        tooltip(text(content, comparisons.assumptions), 'weapons');
-        text(content, 'Natural Melee skill: ' + Number(comparisons.attack.toFixed(2)) + '.');
-        text(content, comparisons.limits);
-        comparisons.matches.forEach(function (match) {
-            var rows = disclosure(content, match.label + ' / ' + match.armour + ' body armour');
-            match.rows.forEach(function (row) {
-                text(rows, row.name, true);
-                text(rows, Number(row.hit.toFixed(1)) + '% hit · ' + Number(row.hp.toFixed(2)) +
-                    ' expected HP · ' + Number(row.armour.toFixed(2)) + ' expected armour · ' +
-                    row.fat + '/' + row.masteredFat + ' Fatigue');
-                if (row.wins !== null) text(rows, 'More immediate HP than Fighting Spear at Melee skill: ' +
-                    (row.wins.length ? row.wins.map(function (range) {
-                        return range[0] === range[1] ? String(range[0]) : range[0] + '-' + range[1];
-                    }).join(', ') : 'none in the compared range') + '.');
-            });
+            tooltip($('<span/>').text(spec[1] + ' ' + spec[2]).appendTo(row), spec[0]);
+            $('<span class="bl-effect-value"/>').text(value).attr('title', effect.owned ? 'Current value' : 'Not learned').appendTo(row);
         });
     };
     Controller.prototype.render = function () {
         if (!this.panel) return;
-        disposeLists(this.panel);
-        this.panel.empty().hide();
-        this.screen.mContainer.removeClass('bl-with-plan');
+        disposeLists(this.panel); this.panel.empty().hide().removeClass('bl-failure'); this.screen.mContainer.removeClass('bl-with-plan');
         var self = this, data = this.data, plan = data && data.plan;
-        this.entry.toggle(!!(data && data.settings.Enabled));
-        this.markPerks();
-        if (!data || !data.settings.Enabled || !plan || !plan.enabled || data.issue) { this.renderOffer(); return; }
+        var enabled = data ? data.settings.Enabled : this.enabled;
+        this.entry.toggle(this.visible && this.actor !== null && enabled !== false); this.markPerks();
+        if (!this.visible || !data || !data.settings.Enabled || !plan || !plan.enabled || data.issue) { this.renderOffer(); return; }
         this.panel.show(); this.screen.mContainer.addClass('bl-with-plan');
-        var header = $('<div class="bl-plan-header"/>').appendTo(this.panel);
-        text(header, plan.label, true).addClass('bl-plan-title');
-        this.grades(header, plan);
-        var controls = $('<div class="bl-controls"/>').appendTo(header);
+        text(this.panel, plan.label, true).addClass('bl-plan-title');
+        var controls = $('<div class="bl-controls"/>').appendTo(this.panel);
         button(controls, 'Change build', function () { self.evaluate(); });
-        button(controls, 'Disable', function () { self.request('enabled', {enabled: false}); });
-        var body = $('<div class="bl-plan-body"/>').appendTo(this.panel);
-        body.css('top', header.position().top + header.outerHeight());
-        var content = scroll(body);
+        button(controls, 'Disable', function () { self.request('enabled', {enabled:false}); });
+        this.targets(this.panel, plan, data.stars, true);
+        this.perkOrder(this.panel, plan, data.defs, true);
         this.effects($('<div class="bl-effects"/>').appendTo(this.panel), plan.effects);
-        if (data.settings.PerkHighlights) text(content, 'Perks: green route / blue flex.').addClass('bl-muted');
-        this.routeWarnings(content, plan.route, data.defs);
-        if (plan.legacy) text(content, 'Saved definition differs from this catalog: original route and targets retained. Change build to adopt a current destination.').addClass('bl-muted');
-        data.warnings.forEach(function (warning) { text(content, warning).addClass('bl-warning'); });
-        this.targets(content, plan, data.stars, true);
-        var gear = plan.equipment;
-        if (gear) {
-            gear.cycles.forEach(function (cycle) {
-                if (!cycle.projectedLegal || (cycle.currentFat !== null && !cycle.currentLegal))
-                    text(content, (cycle.projectedLegal ? 'Current ' : 'Planned ') + cycle.label +
-                        ': AP requirement is not met; check Equipment advice.').addClass('bl-warning');
-            });
-            var equipment = disclosure(content, 'Equipment advice');
-            text(equipment, plan.weapons);
-            if (plan.masteryNote) text(equipment, plan.masteryNote);
-            this.weaponComparisons(equipment, data.weaponComparisons);
-            text(equipment, 'Capacity ' + gear.capacity + ' · headroom now ' + gear.headroom + ' · recovery ' + gear.recovery + '/turn');
-            text(equipment, 'Armour head/body max: ' + gear.headArmour + ' / ' + gear.bodyArmour + '. Raw weight ' + gear.rawArmour + '; effective cost ' + gear.effectiveArmour + '.');
-            text(equipment, plan.armour === 'nimble' ? 'Nimble: 15 raw armour weight keeps the base 40% HP damage taken. More protection may justify more weight.' : 'Battle Forged: no universal armour cap. Fit heavy protection within the action reserve.');
-            gear.cycles.forEach(function (cycle) {
-                text(equipment, cycle.label, true);
-                text(equipment, 'Planned standard weapon: ' + cycle.projectedFat + ' Fatigue / ' + cycle.projectedAP + ' AP. ' + cycle.turns + ' turns, rested start, ' + cycle.buffer + ' reserve.');
-                if (!cycle.projectedLegal) text(equipment, 'This planned cycle exceeds available AP; use a legal fallback or change the route.');
-                else text(equipment, 'Needs ' + cycle.reserve + ' capacity; head + body allowance ' + (cycle.armourBudget === null ? 'unknown' : cycle.armourBudget) + ' effective weight with the other current items and modifiers unchanged.');
-                text(equipment, cycle.currentFat === null ? 'Matching actions are not currently equipped/acquired; current cycle cost is unknown.' :
-                    'Current actions: ' + cycle.currentFat + ' Fatigue / ' + cycle.currentAP + ' AP; ' + cycle.currentReserve + ' capacity for this cycle.' + (cycle.currentLegal ? '' : ' AP requirement is not met.'));
-            });
-            text(equipment, 'Weapons, shield, ammunition and bag penalties are already included by the game in capacity. Future Bags and Belts/Brawny savings are not assumed. Terrain, incoming hits, swaps, ammunition and target conditions still matter.');
-            gear.items.forEach(function (item) { text(equipment, (item.bag ? 'Bag: ' : 'Equipped: ') + item.name); });
-        }
-        this.allocation(content, plan);
-        content.closest('.bl-scroll').trigger('update', true);
         this.renderOffer();
     };
     Controller.prototype.evaluate = function () {
-        var self = this;
-        this.request('evaluate', {}, function (data) { if (data.settings.Enabled) self.compare(data); });
+        var self = this; this.request('evaluate', {}, function (data) { if (data.settings.Enabled) self.compare(data); });
     };
     Controller.prototype.closeCompare = function () {
         if (!this.popup) return;
-        disposeLists(this.popup);
-        this.popup.destroyPopupDialog(); this.popup = null;
+        disposeLists(this.popup); this.popup.destroyPopupDialog(); this.popup = null;
         this.screen.mDataSource.notifyBackendPopupDialogIsVisible(false);
     };
+    Controller.prototype.dialog = function (title) {
+        this.closeCompare(); this.screen.mDataSource.notifyBackendPopupDialogIsVisible(true);
+        this.popup = this.screen.mContainer.createPopupDialog(safe(title), null, null, 'bl-compare');
+        return this.popup;
+    };
+    Controller.prototype.current = function (data, popup) {
+        return this.popup === popup && this.visible && this.actor === data.actor && this.data === data && data.settings.Enabled;
+    };
     Controller.prototype.compare = function (data) {
-        var self = this;
-        this.closeCompare();
         if (!data.settings.Enabled) return;
-        this.screen.mDataSource.notifyBackendPopupDialogIsVisible(true);
-        var popup = this.popup = this.screen.mContainer.createPopupDialog(safe(data.title), null, null, 'bl-compare');
-        // Keep the native popup chrome; CSS owns sizing instead of addContent's fixed pixel width.
+        var self = this, popup = this.dialog(data.title), selected = null, weapon = 'All', style = 'All', page = 0;
         var body = $('<div class="bl-compare-body"/>').appendTo(popup.findPopupDialogContentContainer());
         var context = $('<div class="bl-compare-context"/>').appendTo(body);
-        text(context, data.name, true);
-        text(context, 'Fit measures this brother. Spears and swords suit early accuracy; armour and enemy resistances can favour other weapons.');
-        var selected = null, roleFilter = 'All', weaponFilter = 'All', rows = [], menu = null;
-        function matches(build) {
-            return (roleFilter === 'All' || build.role === roleFilter) &&
-                (weaponFilter === 'All' || build.weaponTags.indexOf(weaponFilter) !== -1);
+        text(context, data.name + ' · Campaign build library', true);
+        tooltip(text(context, 'Potential: fit to creator targets. 50 = Minimum · 100 = Ideal'), 'potential');
+        var tools = $('<div class="bl-toolbar"/>').appendTo(context);
+        button(tools, 'Create build', function () { if (self.current(data,popup)) self.editor(data,null); });
+        button(tools, 'Import', function () { if (self.current(data,popup)) self.share(data,null); });
+        button(tools, 'Export all', function () {
+            if (self.current(data,popup)) self.request('export',{build:null},function (reply) { self.share(reply,reply.share); });
+        });
+        var filters = $('<div class="bl-filters"/>').appendTo(context), chooser = null, filterButton = null;
+        function closeChooser() {
+            if (!chooser) return;
+            chooser.remove(); chooser = null;
+            filterButton.attr('aria-expanded', false); filterButton = null;
         }
-        function current() {
-            return self.popup === popup && self.visible && self.actor === data.actor &&
-                self.data === data && data.settings.Enabled;
+        function filter(label, values, change) {
+            var choice = 'All';
+            var control = button(filters, label + ': ' + choice, function () {
+                if (!self.current(data,popup)) return;
+                var closing = filterButton === control;
+                closeChooser();
+                if (closing) return;
+                var panel = chooser = $('<div class="bl-filter-chooser"/>').appendTo(filters);
+                filterButton = control; control.attr('aria-expanded', true);
+                var heading = $('<div class="bl-filter-heading"/>').appendTo(panel);
+                text(heading,label,true);
+                button(heading,'Close',function () { if (self.current(data,popup) && chooser === panel) closeChooser(); });
+                var options = $('<div class="bl-filter-options"/>').appendTo(panel);
+                ['All'].concat(values).forEach(function (value) {
+                    button(options,value,function () {
+                        if (!self.current(data,popup) || chooser !== panel) return;
+                        closeChooser(); choice = value; change(value);
+                        control.changeButtonText(safe(label + ': ' + value));
+                        page = 0; selected = null; draw();
+                    }).toggleClass('bl-filter-active',value === choice).attr('aria-pressed',value === choice);
+                });
+            }).attr('aria-expanded',false);
         }
-        function commit(action, extra) {
-            if (!current() || data.issue) return;
-            self.closeCompare(); self.request(action, extra);
-        }
-        var filters = $('<div class="bl-filters"/>').appendTo(context);
-        var count = text(context, data.builds.length + ' builds').addClass('bl-muted');
+        filter('Weapon',data.weaponTags,function (v) {weapon=v;}); filter('Playstyle',data.playstyleTags,function (v) {style=v;});
         var columns = $('<div class="bl-compare-columns"/>').appendTo(body);
         var catalog = $('<div class="bl-build-list"/>').appendTo(columns);
-        var headings = $('<div class="bl-catalog-heading text-font-normal"/>').appendTo(catalog);
-        $('<span/>').text('Build').appendTo(headings);
-        tooltip($('<span class="bl-now-column"/>').text('Now').appendTo(headings), 'now');
-        tooltip($('<span class="bl-potential-column"/>').text('Potential').appendTo(headings), 'potential');
-        var list = scroll($('<div class="bl-catalog-body"/>').appendTo(catalog));
-        var details = scroll($('<div class="bl-build-details"/>').appendTo(columns)).addClass('bl-detail-content');
-        function preview(build, row) {
-            if (!current() || !matches(build)) return;
-            selected = build;
-            var track = popup.findPopupDialogOkButton();
-            if (track) track.enableButton(!data.issue);
-            list.find('.bl-build-row').removeClass('is-selected'); row.addClass('is-selected');
-            disposeTooltips(details); details.empty();
-            if (data.issue) text(details, data.issue).addClass('bl-warning');
-            text(details, build.label, true).addClass('bl-detail-title');
-            var role = build.preferred ?
-                (data.recommended === build.id ? 'Preferred role' : 'One of ' + data.primary.length + ' preferred roles') :
-                build.alternative ? 'Conditional alternative' : null;
-            if (role) text(details, role).addClass('bl-muted');
-            if (build.niche) text(details, build.niche);
-            self.grades(details, build);
-            self.routeWarnings(details, build.route, data.defs);
-            if (data.plan && !data.issue) text(details, (data.plan.enabled ? 'Saved: ' : 'Disabled: ') + data.plan.label +
-                '. Change build replaces its route and replacements.').addClass('bl-warning');
-            self.targets(details, build, data.stars, false);
-            var perks = disclosure(details, 'Perk preview');
-            if (build.masteryNote) text(perks, build.masteryNote);
-            build.adjustments.forEach(function (change) {
-                text(perks, 'Keeps ' + perkName(change.with, data.defs) + ' instead of ' + perkName(change.replace, data.defs) + '.');
+        var list = $('<div class="bl-catalog-body"/>').appendTo(catalog);
+        var paging = $('<div class="bl-paging"/>').appendTo(catalog);
+        var details = $('<div class="bl-build-details bl-detail-content"/>').appendTo(columns);
+        function preview(build) {
+            if (!self.current(data,popup) || !matches(build,weapon,style)) return;
+            selected=build; disposeTooltips(details); details.empty();
+            list.find('.bl-build-row').removeClass('is-selected').filter(function () {return $(this).attr('data-build')===build.id;}).addClass('is-selected');
+            text(details,build.label + ' · ' + scoreLabel(build),true);
+            self.targets(details,build,data.stars,false); self.perkOrder(details,build,data.defs,false);
+            var actions=$('<div class="bl-toolbar"/>').appendTo(details);
+            button(actions,'Edit',function () {
+                if (self.current(data,popup)) self.editor(data,data.library.filter(function (b) {return b.id===build.id;})[0]);
             });
-            if (build.route.acquired.length) text(perks, 'Acquired: ' + perkList(build.route.acquired, data.defs));
-            var route = $('<div class="bl-route-list"/>').appendTo(perks);
-            build.route.remaining.forEach(function (id, i) { text(route, (i + 1) + '. ' + perkName(id, data.defs)); });
-            var advice = disclosure(details, data.settings.EquipmentAdvice ? 'Build notes & equipment' : 'Build notes');
-            text(advice, build.note);
-            if (data.settings.EquipmentAdvice) {
-                text(advice, build.weapons);
-                self.weaponComparisons(advice, data.weaponComparisons);
-            }
-            data.notes.forEach(function (note) { text(advice, note); });
-            data.warnings.forEach(function (warning) { text(details, warning).addClass('bl-warning'); });
-            self.allocation(details, build);
-            details.closest('.bl-scroll').trigger('update', true).trigger('scroll', {top: 0});
-        }
-        var first = null, saved = null;
-        data.builds.forEach(function (build) {
-            var row = $('<div class="bl-build-row text-font-normal" role="button" tabindex="0"/>')
-                .attr('data-build', build.id).appendTo(list);
-            tooltip($('<span class="bl-build-grade bl-now-column title-font-big"/>').text(build.nowGrade).appendTo(row), 'now');
-            tooltip($('<span class="bl-build-grade bl-potential-column title-font-big"/>').text(build.grade).appendTo(row), 'potential');
-            $('<span class="bl-build-name"/>').text(build.label).appendTo(row);
-            row.on('click', function () { preview(build, row); });
-            row.on('keydown', function (event) {
-                if (event.which === 13 || event.which === 32) { event.preventDefault(); preview(build, row); }
+            button(actions,'Export',function () { if (self.current(data,popup)) self.request('export',{build:build.id},function (reply) {self.share(reply,reply.share);}); });
+            button(actions,'Delete',function () {
+                if (!self.current(data,popup)) return;
+                actions.empty();text(actions,'Remove from library? Tracked plans keep their snapshots.');
+                button(actions,'Delete build',function () {if(self.current(data,popup)) self.request('deleteBuild',{build:build.id},function (reply) {self.compare(reply);});});
+                button(actions,'Keep',function () {preview(build);});
             });
-            rows.push({build: build, row: row});
-            if (!first) first = {build: build, row: row};
-            if (data.plan && data.plan.build === build.id) saved = {build: build, row: row};
-        });
-        function closeMenu() {
-            if (!menu) return;
-            disposeLists(menu); menu.remove(); menu = null;
+            popup.findPopupDialogOkButton().enableButton(!data.issue && !data.libraryIssue);
         }
-        function applyFilters() {
-            var visible = 0;
-            rows.forEach(function (entry) {
-                var show = matches(entry.build); entry.row.toggle(show);
-                if (show) visible++;
+        function draw() {
+            closeChooser();
+            disposeTooltips(list); list.empty(); paging.empty(); disposeTooltips(details); details.empty();
+            var filtered=data.builds.filter(function (b) {return matches(b,weapon,style);});
+            filtered.slice(page*10,page*10+10).forEach(function (build) {
+                var row=$('<div class="bl-build-row text-font-normal" role="button" tabindex="0"/>').attr('data-build',build.id).appendTo(list);
+                $('<span class="bl-build-grade"/>').text(scoreLabel(build)).appendTo(row);
+                $('<span class="bl-build-name"/>').text(build.label).appendTo(row);
+                row.on('click',function () {preview(build);}).on('keydown',function(e){if(e.which===13||e.which===32){e.preventDefault();preview(build);}});
             });
-            count.text(visible + ' of ' + data.builds.length + ' builds');
-            if (selected && !matches(selected)) {
-                selected = null;
-                list.find('.bl-build-row').removeClass('is-selected');
-            }
-            if (!selected) {
-                disposeTooltips(details); details.empty();
-                text(details, visible ? 'Choose a visible build to preview and track.' : 'No builds match both filters.');
-            }
-            popup.findPopupDialogOkButton().enableButton(!!selected && !data.issue);
-            list.closest('.bl-scroll').trigger('update', true).trigger('scroll', {top: 0});
-            details.closest('.bl-scroll').trigger('update', true);
-        }
-        function filterControl(kind, values) {
-            var holder = $('<div class="bl-filter-control"/>').appendTo(filters);
-            function render() {
-                holder.empty();
-                button(holder, kind + ': ' + (kind === 'Role' ? roleFilter : weaponFilter), function () {
-                    if (!current()) return;
-                    closeMenu();
-                    var opened = menu = $('<div class="bl-filter-menu"/>').appendTo(columns);
-                    var options = scroll(opened);
-                    button(options, 'Close filter', function () { if (current() && menu === opened) closeMenu(); });
-                    values.forEach(function (value) {
-                        button(options, value, function () {
-                            if (!current() || menu !== opened) return;
-                            if (kind === 'Role') roleFilter = value; else weaponFilter = value;
-                            closeMenu(); render(); applyFilters();
-                        });
-                    });
-                    options.closest('.bl-scroll').trigger('update', true);
+            text(paging,filtered.length ? (page*10+1)+'–'+Math.min(page*10+10,filtered.length)+' of '+filtered.length : '0 matches');
+            if(page>0) button(paging,'Previous',function(){if(self.current(data,popup)){page--;selected=null;draw();}});
+            if((page+1)*10<filtered.length) button(paging,'Next',function(){if(self.current(data,popup)){page++;selected=null;draw();}});
+            text(details,data.libraryIssue || (data.builds.length===0 ? 'Your library is empty. Create a build or import share text.' :
+                filtered.length ? 'Select a build to inspect its targets and perk order.' : 'No builds match both filters.'));
+            if(data.issue) text(details,data.issue).addClass('bl-warning');
+            if(data.plan) text(details,(data.plan.enabled?'Tracking: ':'Disabled plan: ')+data.plan.label);
+            // Legacy replacements stay deliberate and reachable from Change build, outside the compact panel.
+            if(data.plan && data.plan.options) data.plan.options.forEach(function(option){
+                button(details,(option.active?'Restore ':'Use ')+perkName(option.active?option.replace:option.with,data.defs),function(){
+                    if(self.current(data,popup)) self.request('replace',option,function(reply){self.closeCompare();});
                 });
+            });
+            popup.findPopupDialogOkButton().enableButton(false);
+        }
+        popup.addPopupDialogCancelButton(function(){if(self.popup===popup)self.closeCompare();});
+        popup.addPopupDialogButton(data.plan?'Change build':'Track build','l-ok-button',function(){
+            if(self.current(data,popup)&&selected&&matches(selected,weapon,style)&&!data.issue) {
+                self.request('track',{build:selected.id},function(){self.closeCompare();});
             }
-            render();
-        }
-        var roles = [], weapons = [];
-        data.builds.forEach(function (build) {
-            if (roles.indexOf(build.role) === -1) roles.push(build.role);
-            build.weaponTags.forEach(function (tag) { if (weapons.indexOf(tag) === -1) weapons.push(tag); });
-        });
-        filterControl('Role', ['All'].concat(roles.sort()));
-        filterControl('Weapon', ['All'].concat(weapons.sort()));
-        var initial = saved || first;
-        if (initial) {
-            preview(initial.build, initial.row);
-            list.closest('.bl-scroll').trigger('update', true).scrollListToElement(initial.row);
-        }
-        popup.addPopupDialogCancelButton(function () { if (self.popup === popup) self.closeCompare(); });
-        popup.addPopupDialogButton(data.plan ? 'Change build' : 'Track build', 'l-ok-button', function () {
-            if (selected && matches(selected)) commit('track', {build: selected.id});
-        }, !!data.issue || !initial);
-        if (data.plan && !data.plan.enabled && !data.issue) {
-            popup.addClass('bl-has-resume');
-            popup.addPopupDialogButton('Re-enable plan', 'bl-resume-button', function () {
-                commit('enabled', {enabled: true});
+        },true);
+        if(data.plan&&!data.plan.enabled&&!data.issue) {
+            popup.addClass('bl-has-resume');popup.addPopupDialogButton('Re-enable plan','bl-resume-button',function(){
+                if(self.current(data,popup))self.request('enabled',{enabled:true},function(){self.closeCompare();});
             });
         }
+        draw();
+    };
+    Controller.prototype.editor = function (data, original) {
+        var self=this, popup=this.dialog(original?'Edit build':'Create build');popup.addClass('bl-editor');
+        var b=original?JSON.parse(JSON.stringify(original)):{id:data.newBuildID,label:'',targets:{},preferred:{},route:[],flex:[],weaponTags:[],playstyleTags:[]};
+        var body=$('<div class="bl-editor-body"/>').appendTo(popup.findPopupDialogContentContainer());
+        var title=$('<label class="bl-name-field text-font-normal"/>').text('Build name ').appendTo(body);
+        var name=$('<input type="text" maxlength="40"/>').val(b.label).appendTo(title);
+        var board=$('<div class="bl-board"/>').appendTo(body),left=$('<div class="bl-board-targets"/>').appendTo(board);
+        var middle=$('<div class="bl-board-perks"/>').appendTo(board),right=$('<div class="bl-board-order"/>').appendTo(board);
+        text(left,'Minimum / Ideal',true);text(left,'Blank pair = untargeted. 0–500, two decimals.');
+        var targetTable=$('<table class="bl-targets bl-input-targets"/>').appendTo(left),inputs={};
+        Object.keys(names).forEach(function(k){
+            var row=$('<tr/>').appendTo(targetTable);$('<td/>').text(names[k]).appendTo(row);inputs[k]=[];
+            ['targets','preferred'].forEach(function(field){inputs[k].push($('<input type="text" inputmode="decimal"/>').attr('aria-label',names[k]+' '+(field==='targets'?'Minimum':'Ideal'))
+                .val(b[field][k]===undefined?'':b[field][k]).appendTo($('<td/>').appendTo(row)));});
+        });
+        function tags(parent,label,values,key){
+            text(parent,label,true);var grid=$('<div class="bl-tag-grid"/>').appendTo(parent);
+            values.forEach(function(tag){var node=$('<label class="bl-tag text-font-normal"/>').appendTo(grid);
+                var input=$('<input type="checkbox"/>').prop('checked',b[key].indexOf(tag)!==-1).appendTo(node);
+                if(data.tagIcons && data.tagIcons[tag])$('<img class="bl-tag-icon"/>').attr('src',Path.GFX+data.tagIcons[tag]).attr('alt','').appendTo(node);
+                $('<span/>').text(tag).appendTo(node);
+                input.on('change',function(){var at=b[key].indexOf(tag);if(input.prop('checked')&&at===-1)b[key].push(tag);else if(!input.prop('checked')&&at!==-1)b[key].splice(at,1);});
+            });
+        }
+        tags(left,'Playstyle',data.playstyleTags,'playstyleTags');
+        text(middle,'Perks · click to add / remove',true);
+        var tree=$('<div class="bl-perk-tree"/>').appendTo(middle),order=$('<div class="bl-edit-route"/>').appendTo(right);
+        function tiny(parent,label,title,action){return $('<button type="button" class="bl-small"/>').text(label).attr('title',title).on('click',action).appendTo(parent);}
+        function drawRoute(){
+            order.empty();text(order,'Creator order · F = flex',true);
+            text(order,b.route.length+' picks · unchecked F = mandatory');
+            b.route.forEach(function(id,i){
+                var row=$('<div class="bl-edit-perk text-font-normal"/>').appendTo(order);
+                $('<span/>').text((i+1)+'. '+perkName(id,data.defs)).appendTo(row);
+                var actions=$('<div class="bl-perk-actions"/>').appendTo(row);
+                tiny(actions,'Up','Move earlier',function(){if(i>0){b.route.splice(i-1,0,b.route.splice(i,1)[0]);drawRoute();}});
+                tiny(actions,'Dn','Move later',function(){if(i<b.route.length-1){b.route.splice(i+1,0,b.route.splice(i,1)[0]);drawRoute();}});
+                var label=$('<label/>').text('F').appendTo(actions),flex=$('<input type="checkbox"/>').prop('checked',b.flex.indexOf(id)!==-1).prependTo(label);
+                flex.on('change',function(){var at=b.flex.indexOf(id);if(flex.prop('checked')&&at===-1)b.flex.push(id);else if(!flex.prop('checked')&&at!==-1)b.flex.splice(at,1);});
+                if(data.defs[id].unlock>i)row.addClass('bl-target-impossible').attr('title','Requires '+data.defs[id].unlock+' earlier picks. Reorder or add earlier-tier perks.');
+            });
+            tree.find('.bl-perk-choice').each(function(){
+                var selected=b.route.indexOf($(this).attr('data-perk'))!==-1;
+                $(this).toggleClass('is-selected',selected).attr('aria-pressed',selected);
+            });
+        }
+        var tier=null,treeRow=null;
+        Object.keys(data.defs).sort(function(a,c){return data.defs[a].row-data.defs[c].row||data.defs[a].column-data.defs[c].column;}).forEach(function(id){
+            var def=data.defs[id];
+            if(tier!==def.row){tier=def.row;treeRow=$('<div class="bl-perk-tier"/>').appendTo(tree);}
+            var node=$('<button type="button" class="bl-perk-choice"/>').attr('data-perk',id).attr('title',def.name+' · '+def.unlock+' earlier picks').attr('aria-label',def.name).appendTo(treeRow);
+            if(def.icon)$('<img/>').attr('src',Path.GFX+def.icon).attr('alt',def.name).appendTo(node);else node.text(def.name);
+            node.on('click',function(){var at=b.route.indexOf(id);if(at===-1){if(b.route.length>=11){self.showError('At most 11 picks, including Student. Remove a perk first.');return;}b.route.push(id);}else{b.route.splice(at,1);at=b.flex.indexOf(id);if(at!==-1)b.flex.splice(at,1);}drawRoute();});
+        });
+        tags(middle,'Weapon / equipment',data.weaponTags,'weaponTags');drawRoute();
+        popup.addPopupDialogCancelButton(function(){if(self.popup===popup)self.evaluate();});
+        popup.addPopupDialogButton('Save build','l-ok-button',function(){
+            if(!self.current(data,popup))return;b.label=name.val();b.targets={};b.preferred={};
+            Object.keys(inputs).forEach(function(k){var values=inputs[k];['targets','preferred'].forEach(function(field,i){
+                var value=values[i].val().trim();if(value!=='')b[field][k]=/^\d+(\.\d{1,2})?$/.test(value)?Number(value):value;
+            });});
+            self.request('saveBuild',{definition:b,create:!original},function(reply){self.compare(reply);});
+        });
+    };
+    Controller.prototype.share = function(data, exported){
+        var self=this,popup=this.dialog(exported===null?'Import builds':'Export builds');popup.addClass('bl-sharing');
+        var body=$('<div class="bl-share-body"/>').appendTo(popup.findPopupDialogContentContainer());
+        text(body,exported===null?'Paste a single or bulk BL1 string. Imports apply together.':'Select text, then Ctrl+C. Paste into another campaign or share with a player.',true);
+        text(body,'Library belongs to this campaign; save the campaign to retain edits. Tracked snapshots stay independent.');
+        var area=$('<textarea class="bl-share-text" spellcheck="false" maxlength="48000"/>').attr('aria-label','Build share text').val(exported||'').prop('readOnly',exported!==null).appendTo(body);
+        if(exported===null)button(body,'Paste clipboard',function(){
+            if(!self.current(data,popup))return;
+            var previous=area.val(),pasted=false;
+            area.focus();area[0].select();
+            try { pasted=typeof document.execCommand==='function' && document.execCommand('paste'); }
+            catch(error) { pasted=false; }
+            if(!pasted || !area.val()){
+                area.val(previous);
+                self.showError('Could not paste clipboard text. Your text is unchanged; paste manually.');
+            } else popup.find('.bl-error').remove();
+        });
+        var policy=$('<select aria-label="Duplicate handling"/>');
+        if(exported===null){var label=$('<label class="text-font-normal"/>').text('Duplicate IDs or names: ').appendTo(body);policy.appendTo(label);
+            [['reject','Reject duplicates'],['skip','Skip duplicates'],['copy','Import copies']].forEach(function(p){$('<option/>').val(p[0]).text(p[1]).appendTo(policy);});}
+        else button(body,'Select all text',function(){area.focus();area[0].select();});
+        popup.addPopupDialogCancelButton(function(){if(self.popup===popup)self.evaluate();});
+        if(exported===null)popup.addPopupDialogButton('Import builds','l-ok-button',function(){if(self.current(data,popup))self.request('import',{text:area.val().replace(/^\s+/,''),policy:policy.val()},function(reply){
+            self.compare(reply);
+            if(reply.notice)text($('<div class="bl-error"/>').attr('role','status').appendTo(self.popup.findPopupDialogContentContainer()),reply.notice);
+        });});
     };
     Controller.prototype.renderOffer = function () {
         if (!this.offerContent) return;
@@ -491,7 +425,7 @@ var BroLedgerUI = (function () {
             });
         });
     };
-    if (typeof CharacterScreen === 'undefined') return {Controller: Controller, safe: safe};
+    if (typeof CharacterScreen === 'undefined') return {matches: matches, Controller: Controller, safe: safe};
     var connection = CharacterScreen.prototype.onConnection;
     CharacterScreen.prototype.onConnection = function (handle) {
         connection.call(this, handle);
@@ -515,6 +449,7 @@ var BroLedgerUI = (function () {
     CharacterScreen.prototype.show = function (data) {
         if (this.broLedger) {
             this.broLedger.visible = true;
+            this.broLedger.enabled = null;
             this.broLedger.invalidate(); this.broLedger.render();
         }
         show.call(this, data);
@@ -565,6 +500,6 @@ var BroLedgerUI = (function () {
         }
         return content;
     };
-    return {Controller: Controller};
+    return {matches: matches, Controller: Controller};
 }());
 if (typeof module !== 'undefined') module.exports = BroLedgerUI;

@@ -1,5 +1,9 @@
 // Minimal unlock fixtures for the used strategy IDs, from pinned c82f58e. Not shipped.
 return {
+    ["perk.student"]={unlock=0},
+    ["perk.crippling_strikes"]={unlock=0},
+    ["perk.taunt"]={unlock=2},
+    ["perk.backstabber"]={unlock=2},
     ["perk.fast_adaption"]={unlock=0},
     ["perk.colossus"]={unlock=0},
     ["perk.nine_lives"]={unlock=0},

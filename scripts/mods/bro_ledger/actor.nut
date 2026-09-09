@@ -45,14 +45,15 @@
         warnings.push("Missing hand: weapon/shield choices are restricted; follow the actual equipment slots.");
     foreach (id in ["huge", "tiny", "brute", "drunkard"])
         if (("trait." + id) in skills)
-            notes.push("Damage effects of " + id + " are tactical context, not extra stat points in this fit grade.");
+            notes.push("Damage effects of " + id + " are tactical context, not extra stat points in this target fit.");
     foreach (id, _ in skills)
         if (id.find("trait.oath_") == 0 || id.find("trait.hate_") == 0 || id.find("trait.fear_") == 0)
             notes.push("Enemy/oath-dependent bonuses are excluded from natural targets: " + id + ".");
     // Native Initiative subtracts additive Stamina loss after multipliers; equipment/fatigue are separate.
     local initiativeLoss = ::Math.maxf(0.0, natural.fatigue - stats.fatigue);
-    foreach (key in this.Stats) stats[key] *= scale[key];
-    return {stats = stats, scale = scale, notes = notes, warnings = warnings, initiativeLoss = initiativeLoss};
+    local rawStats=this.copy(stats);
+    foreach (key in this.Stats) stats[key]=this.finalStat(key,rawStats[key],scale[key],initiativeLoss);
+    return {stats = stats, rawStats=rawStats, scale = scale, notes = notes, warnings = warnings, initiativeLoss = initiativeLoss};
 };
 
 ::BroLedger.ownedActor <- function(id)
@@ -65,8 +66,9 @@
 ::BroLedger.perkDefs <- function()
 {
     local defs = {};
-    foreach (row in ::Const.Perks.Perks) foreach (perk in row)
-        if ("ID" in perk && "Unlocks" in perk) defs[perk.ID] <- {unlock = perk.Unlocks, name = perk.Name};
+    foreach (row, perks in ::Const.Perks.Perks) foreach (column, perk in perks)
+        if ("ID" in perk && "Unlocks" in perk) defs[perk.ID] <- {unlock = perk.Unlocks, name = perk.Name,
+            icon = "Icon" in perk ? perk.Icon : null, row = row, column = column};
     return defs;
 };
 
@@ -94,6 +96,9 @@
     }
     local normalized = this.normalize(snapshot.stats, skills);
     snapshot.stats = normalized.stats;
+    snapshot.rawStats <- normalized.rawStats;
+    snapshot.initiativeLoss <- normalized.initiativeLoss;
+    snapshot.missingHand <- "injury.missing_hand" in skills;
     snapshot.scale <- normalized.scale;
     snapshot.notes <- normalized.notes;
     snapshot.warnings <- normalized.warnings;
@@ -102,11 +107,10 @@
         local field = this.Fields[key][0] + "Mult";
         if (field in natural && this.number(natural[field]) && natural[field] > 0)
         {
-            snapshot.stats[key] *= natural[field];
             snapshot.scale[key] *= natural[field];
         }
+        snapshot.stats[key]=this.endpoint(snapshot,key);
     }
-    snapshot.stats.initiative = ::Math.round(snapshot.stats.initiative - normalized.initiativeLoss);
     local maxLevel = ::Const.XP.MaxLevelWithPerkpoints;
     // Manhunters onUpdateLevel/onUnlockPerk apply the Indebted cap and Student refund at 7.
     if ("State" in ::World && ::World.State != null && ::World.Assets.getOrigin().getID() == "scenario.manhunters" &&
@@ -121,6 +125,7 @@
         typeof snapshot.spent != "integer" || snapshot.spent < 0 || snapshot.spent > 100)
         throw "Unsupported level or point values";
     snapshot.horizon <- ::Math.max(snapshot.level, maxLevel);
+    snapshot.perkHorizon <- maxLevel;
     local earnedVeterans = ::Math.max(0, snapshot.level - ::Const.XP.MaxLevelWithPerkpoints);
     snapshot.normalRows <- ::Math.max(0, maxLevel - snapshot.level) + ::Math.max(0, snapshot.pending - earnedVeterans);
     snapshot.veteranRows <- ::Math.min(snapshot.pending, earnedVeterans);

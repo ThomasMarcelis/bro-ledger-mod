@@ -1,76 +1,49 @@
 # Development
 
-Squirrel reads game state, evaluates builds, produces guidance, and saves the player's chosen plan. JavaScript and CSS display the result in the native character sheet and relay player actions.
+Squirrel owns actor reads, the finite evaluator, definition validation, library persistence, and tracked intent. JavaScript/CSS present data in the native character sheet and relay deliberate actions.
 
-## Architecture
+## Ownership
 
 | File | Responsibility |
 | --- | --- |
-| `scripts/!mods_preload/mod_bro_ledger.nut` | Register dependencies, settings, assets, serialization hooks, and the character-screen bridge. |
-| `scripts/mods/bro_ledger/catalog.nut` | Versioned build targets, routes, variants, and action assumptions. |
-| `scripts/mods/bro_ledger/core.nut` | Shared constants/helpers, stat growth, finite forecasts, and offered-roll advice. |
-| `scripts/mods/bro_ledger/plan.nut` | Create, reconcile, and replace plans; resolve legal routes and flexible perks. |
-| `scripts/mods/bro_ledger/fit.nut` | Grade bands, assessments, stat rows, evaluation, and comparison order. |
-| `scripts/mods/bro_ledger/equipment.nut` | Live equipment readers, action reserves, bounded weapon comparisons, and advice. |
-| `scripts/mods/bro_ledger/actor.nut` | Read and normalize safe live brother facts. |
-| `scripts/mods/bro_ledger/state.nut` | Validate and serialize namespaced actor plans. |
-| `scripts/mods/bro_ledger/screen.nut` | Settings, view payloads, command validation, stale-response rejection, and rollback. |
-| `ui/mods/bro_ledger/ledger.js` | Native character-sheet presentation and callbacks. |
-| `ui/mods/bro_ledger/ledger.css` | Mod-owned layout and game-native styling. |
+| `core.nut` | Constants, native stat endpoints, Gifted availability, finite allocation feasibility. |
+| `library.nut` | Empty campaign library, bounded build validation, inert BL1 sharing, duplicate policy. |
+| `fit.nut` | Gradual shared-allocation Potential, progression bounds, comparison order, visible-roll advice. |
+| `plan.nut` | Snapshot creation, manual perk reconciliation, legal routes and legacy alternatives. |
+| `actor.nut` / `equipment.nut` | Safe live facts and current learned perk effects. |
+| `state.nut` | Namespaced actor flags and immutable plan schemas 1–4. |
+| `screen.nut` / preload | Settings, view/command boundary, native hooks, actor/epoch/revision guards. |
+| `ledger.js` / `ledger.css` | Native board, comparison, sharing, compact guidance, tooltips and controls. |
 
-## Invariants
+Runtime Squirrel files live under `scripts/mods/bro_ledger/`; the preload is `scripts/!mods_preload/mod_bro_ledger.nut`; presentation is under `ui/mods/bro_ledger/`.
 
-- The player alone selects builds, spends points, equips items, and names brothers.
-- Read visible offers and safe live definitions. Never generate future rolls, advance RNG, or mutate a live brother to simulate a forecast.
-- Save intent, not copies of live stats. The persistent contract is mod ID `mod_bro_ledger`, definitions revision 3, and plan schemas 1 and 2.
-- Schema 1 remains readable without migration. Unknown future schemas stay byte-for-byte intact and disable guidance with an explanation.
-- Evaluation and refresh may reconcile guidance on a copy; only Track, Change build, Disable, or re-enable may change saved intent.
-- Validate live data, serialized data, and screen commands at their boundaries. Internal functions rely on those validated shapes.
-- Preserve the native character sheet, roster, stash, controls, perk state, and tooltip lifecycle.
-- Missing or uncertain facts remain unknown. Equipment does not affect build grades.
+The library is one bounded `BroLedger.Library` string in native `World.Flags`, serialized by the game's campaign save lifecycle. It starts empty in a new campaign; it is not global storage. Validation and response generation precede the single flag assignment. Failed parsing, validation, or reads retain the previous bytes and actor revision. The flag primitive is the commit boundary; campaign disk-save failures remain the game's responsibility.
 
-Formulas and tactical assumptions are in [Strategy](STRATEGY.md). Repository working rules are in [AGENTS.md](https://github.com/ThomasMarcelis/bro-ledger-mod/blob/main/AGENTS.md).
+`BL1|` is followed by length-prefixed UTF-8 tokens: build count, then each build's ID/name, eight fixed-order Minimum/Ideal pairs (empty means absent), then count-prefixed route, flex, weapon-tag and playstyle-tag lists. Limits are 48,000 bytes, 32 builds, 40-byte names/IDs, eight stat pairs, 0–500 with two decimals, and ten perks plus Student. No recursion, eval, compilestring, HTML or BBCode parsing occurs. Unknown versions, unsupported perks and damaged libraries remain read-only and are never reset implicitly. Explicit import validates the first declared BL1 block and ignores subsequent bytes with a notice; default decoding and saved-library reads still reject trailing bytes. Import collisions default to rejection; skip/copy are explicit and imports commit together.
 
-## Local setup
+Tracked actor intent remains separate: `BroLedger.Schema` plus MSU `MSU.mod_bro_ledger.Plan` flags. Schema 4 (definitions revision 5) snapshots name, targets, creator route, flex and tags. Schemas 1–3 remain readable without migration. Reads use a non-consuming flag view. Unknown schemas remain unchanged and disable plan writes. Library changes never modify tracked snapshots. Disable retains intent; Change build replaces it.
 
-Required tools are Git, CMake, a C/C++ compiler, Python 3, and Node.js 22 or later. No npm installation is needed.
+Every mutation checks the selected owned actor, screen epoch, observed actor revision, request sequence, and last observed library bytes. Native callbacks and closures reject stale actor/dialog state. Never mutate live actors to forecast, reveal future rolls, spend/equip/rename, or replace native perk confirmation or drag/drop.
 
-Build the pinned Squirrel 3.2 runner inside the ignored `.tools/` directory:
+## Checks and package
 
-```sh
-mkdir -p .tools/src
-git clone https://github.com/albertodemichelis/squirrel.git .tools/src/squirrel
-git -C .tools/src/squirrel checkout f92bc298784ceea459b12e2de33bdff672bfeb83
-cmake -S .tools/src/squirrel -B .tools/src/squirrel/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5
-cmake --build .tools/src/squirrel/build --target sq_static --parallel
-cp .tools/src/squirrel/build/bin/sq_static .tools/sq
-cp .tools/src/squirrel/COPYRIGHT .tools/SQUIRREL-COPYRIGHT
-```
+Use Node.js 22+, Python 3, and the pinned Squirrel 3.2 runner at ignored `.tools/sq` (commit `f92bc298784ceea459b12e2de33bdff672bfeb83`). Build `sq_static` with CMake from [Squirrel](https://github.com/albertodemichelis/squirrel), then copy it locally. The game uses Squirrel 3.0.4 with 32-bit integers/floats; standalone behavior is supporting evidence.
 
-The game uses Squirrel 3.0.4 with 32-bit integers and floats; the local 3.2 runner is a behavioral aid, not the game VM.
-
-Download `mod_msu-1.9.0.zip` from [MSU's releases](https://github.com/MSUTeam/MSU/releases/tag/1.9.0) to `.tools/mod_msu-1.9.0.zip`. `tools/check.py` verifies the hash listed in [Third-party notices](../THIRD_PARTY.md) before extracting its settings and tooltip test fixture. Dependencies stay in ignored `.tools/` and never enter the player ZIP.
-
-## Checks and packaging
+Place the pinned `mod_msu-1.9.0.zip` in `.tools/`; `check.py` verifies the [documented hash](../THIRD_PARTY.md) before extracting its settings/tooltip contract fixtures. No npm install is required.
 
 ```sh
 python3 tools/check.py
 python3 tools/package.py
 ```
 
-Checks cover Squirrel behavior, MSU settings/tooltips, Node UI behavior, and JavaScript syntax. When changing behavior, add the smallest useful proof of the scenario: allocation, grading, normalization, legal routes, plan continuity, validation, stale callbacks, settings, or current effects. Avoid tests that only pin prose, CSS, or DOM structure.
+Checks require a Squirrel success marker and empty stderr, run Node behavior tests, and check JS syntax. Tests cover allocation against exhaustive legal schedules, normalization, target scoring, import/export and corruption limits, persistence rollback, old snapshots, native settings, manual/locked perks and stale callbacks. Obsolete tactical catalog gates are retired.
 
-Packaging creates a deterministic `dist/mod_bro_ledger-<version>.zip` containing original runtime files, README, license, notices, and the two guides in `docs/`. Inspect its contents and printed SHA-256 before distribution. Tests, tools, game assets, dependencies, saves, and private evidence are excluded. `python3 tools/package.py --audit` also builds a separate observer ZIP for gameplay-mutation and RNG checks in a disposable campaign; it is not part of the player download.
+Before packaging, also run `tests/run.nut` and `tests/settings.nut` with a Squirrel 3.0.x runner, requiring the same success marker and empty stderr. The settings suite executes queued preload includes and registered refresh/Evaluate callbacks. Squirrel 3.2 accepts adjacent same-line `if` statements that 3.0.x rejects without a separating newline or semicolon; a compile failure prevents the entire library chunk from registering.
 
-## In-game acceptance
+Packaging creates deterministic `dist/mod_bro_ledger-0.4.8.zip` (unverified prerelease) from original runtime files, README, MIT license, notices, and these two guides. Tools, dependencies, game assets, saves, fixtures and private evidence are excluded. `--audit` builds the separate owned runtime observer for disposable-campaign checks; it is not part of the player ZIP. Its queued command wrapper has a regression for forwarding, gameplay changes, RNG calls, and exception cleanup.
 
-With foreground game control authorized, use the installed Steam edition and a copy of a non-Ironman campaign. Preserve original saves, prevent Cloud writeback, and keep saves and captures out of Git.
+## Acceptance boundary
 
-1. Install the candidate with the pinned dependencies and no older Bro Ledger ZIP. Record the game, platform, UI scale, and complete mod stack.
-2. Evaluate several brothers and inspect all 44 builds, Role/Weapon filters, hybrid membership, empty results, mastery notes, and the disclosed weapon comparisons. Cancel a preview, track a build, switch brothers, and confirm the chosen intent follows the correct actor.
-3. Exercise native perk confirmation, level-up offers, equipment changes, Stash/Perks tabs, tooltips, Disable/re-enable, and Change build. Confirm planner actions never spend, equip, or rename.
-4. Save, quit, reload, and verify new revision-3 schema-2 plans, saved revision-2 mixed builds, and available schema-1 plans without automatic migration. Repeat across combat/world transitions and character-sheet reopenings.
-5. Remove the Bro Ledger ZIP, load/play/save/reload the test copy, reinstall it, and confirm compatible intent returns.
-6. Inspect the UI at 1920×1080, 2560×1440, and 1600×900 where available. Record clipping, input failures, game-log errors, and any untested scenario.
+Before claiming a verified release, verify the complete create/import → compare/filter → track → manual play loop, ten-plus results, 0/1/many libraries, all targets/perks/tags, duplicates, current effects, Disable/re-enable and stale actor/dialog transitions. Verify campaign/library and legacy/new/unknown plan save/reload plus ZIP removal/reinstall on a copied save with a declared game/platform/mod baseline. Until then, publish only as an unverified prerelease.
 
-Record commands, versions, results, and gaps in ignored `.local/`. Automated checks cannot establish game-VM behavior, UI fit, save safety, or platform support. Until the full checklist is verified on a declared baseline, publish only as an unverified prerelease.
+Use production/native browser fixtures at 1920×1080, 2560×1440 and 1600×900. Record scrollHeight/clientHeight, text overflow, input reachability, and separation from native sheet/roster/inventory/perk controls using longest legal content. Source-derived geometry is a hypothesis until rendered. Browser measurements remain distinct from in-game acceptance. Keep commands, captures, fixtures, reviews and remaining gaps in ignored `.local/`; do not redistribute proprietary evidence.

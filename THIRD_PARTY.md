@@ -19,4 +19,4 @@ Local tests use the public [Squirrel](https://github.com/albertodemichelis/squir
 
 ## Strategy provenance
 
-The initial catalog, schedules, and advice were migrated from the project's earlier Bro Ledger web implementation, then rewritten for native game state and bounded Squirrel calculations. Research consulted the Battle Brothers wiki, Bloodngold's summaries of FilthyRobot and FeedingFriendly builds, and community perk guides. Their prose, artwork, and code are not redistributed. Current assumptions and links are recorded in [Strategy](docs/STRATEGY.md).
+Earlier versions included a tactical catalog derived from the project's original web implementation and researched using the Battle Brothers wiki, Bloodngold's summaries, and community perk guides. That catalog is retired; the current library starts empty and players author their own builds. Those sources' prose, artwork, and code are not redistributed. [Strategy](docs/STRATEGY.md) describes the current evaluator and its limits.

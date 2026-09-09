@@ -17,7 +17,7 @@ function session() {
     owner.showError = message => errors.push(message);
     const reply = (i, extra = {}) => calls[i].callback({actor: calls[i].data.actor,
         seq: calls[i].data.seq, epoch: 42, revision: 0,
-        settings: {Enabled: true, PerkHighlights: true, LevelUpRecommendations: true, EquipmentAdvice: true}, ...extra});
+        settings: {Enabled: true, PerkHighlights: true, LevelUpRecommendations: true}, ...extra});
     return {owner, calls, renders, errors, reply};
 }
 test('disable sends the observed epoch and revision and ignores late earlier replies', () => {
@@ -102,11 +102,11 @@ test('disabled recommendations restore the ordinary popup without reading its of
     owner.renderOffer();
     assert.deepEqual(removed, ['bl-levelup-popup', 'bl-levelup', '.bl-offer', 'bl-recommended']);
 });
-test('render hides global UI and omits disabled equipment while retaining the plan', () => {
+test('render hides global UI while retaining the compact plan', () => {
     // Native control boundary double: collect text/visibility, not a DOM/layout emulator.
     const lines = [], visibility = [], classes = [];
     const node = {find() { return this; }, each() {}, empty() { return this; }, hide() { return this; },
-        show() { return this; }, addClass(value) { classes.push(value); return this; }, removeClass() { return this; },
+        show() { return this; }, toggleClass() { return this; }, addClass(value) { classes.push(value); return this; }, removeClass() { return this; },
         text(value) { lines.push(value); return this; }, appendTo() { return this; },
         css() { return this; }, position() { return {top: 0}; }, outerHeight() { return 0; },
         bindTooltip() {}, unbindTooltip() {},
@@ -115,20 +115,17 @@ test('render hides global UI and omits disabled equipment while retaining the pl
     const previous = global.$; global.$ = () => node;
     try {
         const owner = new Controller({mContainer: node});
+        owner.visible = true; owner.actor = 7;
         owner.panel = node; owner.entry = {toggle(value) { visibility.push(value); }};
         owner.markPerks = () => {}; owner.renderOffer = () => {};
         const route = {next: 'perk.a', remaining: ['perk.a'], offplan: [], unknown: [], blocked: [], conflicts: [], feasible: true};
         owner.data = {settings: {Enabled: true, PerkHighlights: false}, defs: {'perk.a': {name: 'Perk sentinel'}}, notes: [], warnings: [],
-            plan: {label: 'Saved route', enabled: true, nowGrade: 'D', grade: 'B', projection: {horizon: 11}, statRows: [], route,
+            plan: {label: 'Saved route', enabled: true, score: 50, projection: {horizon: 11}, statRows: [], route,
                 weapons: 'Equipment sentinel', equipment: null,
                 effects: Object.fromEntries(['dodge', 'nimble', 'battleForged'].map(id => [id, {owned: false, value: null}]))}};
         owner.render();
         assert.equal(visibility.at(-1), true); assert.ok(lines.includes('Saved route'));
         assert.ok(!lines.includes('Equipment sentinel'));
-        owner.data.plan.equipment = {capacity: 60, headroom: 40, recovery: 15, headArmour: 100, bodyArmour: 200,
-            rawArmour: 30, effectiveArmour: 30, cycles: [], items: []};
-        lines.length = 0; owner.render();
-        assert.ok(lines.includes('Equipment sentinel'));
         lines.length = 0; classes.length = 0; owner.data.settings.Enabled = false;
         owner.render();
         assert.equal(visibility.at(-1), false); assert.deepEqual(lines, []); assert.deepEqual(classes, []);

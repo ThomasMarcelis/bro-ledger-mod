@@ -1,5 +1,23 @@
 local B=::BroLedger, cases={}, defs=dofile("tests/perk_unlocks.nut");
 
+cases.perk_definitions_retain_live_tree_positions_without_mutation <- function() {
+    local tree=[
+        [{ID="perk.z",Name="Zulu",Unlocks=0,Icon="z.png"}, {ID="perk.a",Name="Alpha",Unlocks=0}],
+        [], [{ID="perk.m",Name="Middle",Unlocks=0,Icon="m.png"}], [], [], [], []
+    ];
+    ::Const <- {Perks={Perks=tree}};
+    local before=B.copy(tree), actual=B.perkDefs();
+    check(actual.len()==3,"defined perks lost or empty padding emitted");
+    foreach(row,perks in tree) foreach(column,perk in perks) {
+        local def=actual[perk.ID];
+        check("row" in def && "column" in def,"live perk position discarded");
+        check(def.row==row && def.column==column,"tree position inferred from name or unlock");
+        check(def.name==perk.Name && def.unlock==perk.Unlocks,"definition changed");
+        check(def.icon==("Icon" in perk ? perk.Icon : null),"optional icon changed");
+    }
+    check(same(tree,before),"definition read mutated native tree");
+};
+
 cases.normalization_once <- function() {
     local raw=fixture().stats; raw.hp=60; raw.fatigue=100;
     local skills={["trait.strong"]=true,["trait.tough"]=true,["perk.colossus"]=true,["perk.fortified_mind"]=true};
@@ -8,8 +26,8 @@ cases.normalization_once <- function() {
     skills["injury.weakened_heart"]<-true; skills["injury.collapsed_lung_part"]<-true;
     n=B.normalize(raw,skills);
     check(n.stats.hp==49 && n.stats.fatigue==66,"permanent injury not applied to natural stats");
-    local s=fixture(); s.scale<-n.scale;
-    check(B.gain(s,"hp","mean")>2.09 && B.gain(s,"hp","mean")<2.11,"future gains missed injury multiplier");
+    local s=fixture();s.scale=n.scale;s.stats=n.stats;s.rawStats=n.rawStats;
+    check(B.endpoint(s,"hp",1)==51,"future raw growth missed native injury rounding");
 };
 
 cases.reader_maps_all_eight_talents_without_changing_actor <- function() {
@@ -27,25 +45,6 @@ cases.reader_maps_all_eight_talents_without_changing_actor <- function() {
         a.talents=missing;s=B.readActor(a);
         foreach(k in B.Stats) check(s.stars[k]==null,"missing talents became zero");
     }
-};
-
-cases.level_one_potential_uses_talents_and_remaining_growth <- function() {
-    local a=actorFixture(),b=B.findBuild("nimble_2h_axe"),defs=dofile("tests/perk_unlocks.nut");
-    a.level=1;a.pending=0;a.free=0;
-    local plain=B.readActor(a),without=B.evaluate(plain,b,defs);
-    a.talents[4]=3;
-    local talented=B.readActor(a),withStars=B.evaluate(talented,b,defs);
-    foreach(k in B.Stats) check(plain.stats[k]==talented.stats[k],"baseline stats differ");
-    check(B.gain(plain,"matk","mean")==2 && B.gain(talented,"matk","mean")==3.5,"talents did not change expected gain");
-    check(without.grade=="C" && withStars.grade=="B",
-        "same level-one stats did not improve potential fit with useful talent");
-    // Same natural stats and talents, but only one ordinary level remains; keep perk budget legal.
-    a.level=10;a.free=9;
-    local late=B.readActor(a),later=B.evaluate(late,b,defs);
-    check(talented.normalRows==10 && late.normalRows==1 && withStars.route.feasible && later.route.feasible,
-        "remaining-growth scenario changed the perk budget");
-    check(later.grade=="F",
-        "remaining levels ignored");
 };
 
 cases.manhunters_indebted_cap_and_student_refund <- function() {
@@ -113,21 +112,9 @@ cases.fat_initiative_uses_native_final_capacity_loss <- function() {
     check(a.natural.Initiative==108 && a.natural.Stamina==100,"reader changed base properties");
 };
 
-cases.contradictory_points_are_unknown <- function() {
-    local s=fixture(),b=B.findBuild("forged_neutral_axe"),defs={};
-    foreach(id in b.route) defs[id]<-{unlock=0};
-    s.perks["perk.colossus"]<-true;s.spent=0;
-    check(B.evaluate(s,b,defs).grade=="?" && B.route(b,s,defs).next==null,"contradictory perks graded confidently");
-};
-
 cases.native_initiative_rounding <- function() {
-    local a=actorFixture(),b=B.findBuild("qatal_duelist");
-    a.level=11;a.pending=0;a.free=0;a.spent=10;
-    foreach(k,v in b.targets) a.natural[B.Fields[k][0]]=v;
-    a.natural.Initiative=155;
-    foreach(id in b.route) a.skills.push(skill(id,1));a.skills.push(skill("injury.missing_ear",4));
-    local s=B.readActor(a);
-    check(s.stats.initiative==140 && B.evaluate(s,b,defs).grade=="B","Missing Ear155 must round139.5 to140, preserving Qatal B");
+    local a=actorFixture();a.natural.Initiative=155;a.skills.push(skill("injury.missing_ear",4));
+    check(B.readActor(a).stats.initiative==140,"Missing Ear155 must round139.5 to140");
     a=actorFixture();a.natural.Initiative=108;a.natural.InitiativeMult<-0.75;a.skills.push(skill("trait.old",2));
     check(B.readActor(a).stats.initiative==64,"Old multiplier must round63.5 to64 after Stamina loss");
     a.skills.clear();a.skills.push(skill("trait.fat",2));a.natural.StaminaMult<-0.6;
@@ -159,4 +146,5 @@ cases.live_reads_distinguish_absent_unknown_and_zero <- function() {
     a.getSkills=@() {getSkillByID=@(id) {getChance=@() 0.4}};
     check(B.currentEffects(a,perks).nimble.value==60,"one failed getter hid another valid effect");
 };
+
 return cases;
