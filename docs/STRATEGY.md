@@ -30,7 +30,7 @@ Current-offer advice enumerates all 56 triples of the eight visible rolls. It pr
 
 ## Perks and effects
 
-A community route has up to ten unique perks, or eleven including Student, in creator order respecting native unlock counts. Flex is a subset of those suggested picks. Manual off-route acquisitions can fill unacquired flex positions on a guidance copy; mandatory and already learned picks remain. Library edits, evaluation, and refresh cannot rewrite saved intent. Perk budget/unlock conflicts are shown separately from stat fit; equipment/playstyle tags describe creator intent and do not certify a loadout.
+A community route lists up to twenty unique perks in creator order respecting native unlock counts. Mandatory picks must fit a brother's points: ten, or eleven including Student, which cannot be the last mandatory pick. Flex marks the remaining picks as alternates that sit on top of that budget. Manual off-route acquisitions can fill unacquired flex positions on a guidance copy; mandatory and already learned picks remain. Library edits, evaluation, and refresh cannot rewrite saved intent. Perk budget/unlock conflicts are shown separately from stat fit; equipment/playstyle tags describe creator intent and do not certify a loadout.
 
 Schemas 1–3 retain their original snapshots and legacy explicit alternatives. Schemas 4–5 snapshot the definition; schema 5 also saves all eight weights. Older snapshots use implicit equal weights without being rewritten. Template or library changes never update saved snapshots. No retired catalog is consulted to recover unsaved Ideals. Unknown future schemas remain untouched.
 
