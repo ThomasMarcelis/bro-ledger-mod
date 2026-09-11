@@ -68,7 +68,9 @@
     local defs = {};
     foreach (row, perks in ::Const.Perks.Perks) foreach (column, perk in perks)
         if ("ID" in perk && "Unlocks" in perk) defs[perk.ID] <- {unlock = perk.Unlocks, name = perk.Name,
-            icon = "Icon" in perk ? perk.Icon : null, row = row, column = column};
+            icon = "Icon" in perk ? perk.Icon : null, row = row, column = column,
+            // The native tree entry carries the same description the game's own perk tooltip shows.
+            description = "Tooltip" in perk && this.plainName(perk.Tooltip, 800) ? perk.Tooltip : null};
     return defs;
 };
 

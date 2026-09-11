@@ -77,3 +77,9 @@ function libraryFlags() {
     local values={};return {has=@(k) k in values,get=@(k) k in values?values[k]:null,
         set=function(k,v){values[k]<-v;},remove=function(k){if(k in values) delete values[k];}};
 }
+// Player-wide store double: one string outside any campaign save.
+function libraryStore(seed=null) {
+    local held={value=seed};
+    return {has=@() held.value!=null,get=function(){if(held.value==null) throw "no file";return held.value;},
+        set=function(v){held.value=v;},held=held};
+}

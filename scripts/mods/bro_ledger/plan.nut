@@ -129,6 +129,9 @@
         if (id in snapshot.perks) acquired.push(id);
         else remaining.push(id);
     }
+    // Flexible picks are alternates rather than commitments, so only mandatory ones must fit the budget.
+    local flex = this.planFlex(plan), mandatoryRemaining = 0;
+    foreach (id in remaining) if (flex.find(id) == null) mandatoryRemaining++;
     foreach (id, _ in snapshot.perks)
         if (id != "perk.student" && plan.route.find(id) == null) offplan.push(id);
     local pointsKnown = snapshot.free >= 0 && snapshot.spent >= snapshot.perks.len() && snapshot.futurePerks >= 0;
@@ -161,7 +164,9 @@
     }
     return {remaining = order, blocked = work, acquired = acquired, offplan = offplan, unknown = unknown, conflicts = conflicts,
         pointsKnown = pointsKnown, points = points, studentRefund = refund,
+        // Mandatory picks must fit the point budget. Flexible picks are alternates: a build stays
+        // feasible when they do not all fit, so a 10-mandatory build may list extra flexible options.
         feasible = pointsKnown && conflicts.len() == 0 && unknown.len() == 0 && work.len() == 0 &&
-            remaining.len() <= points,
+            mandatoryRemaining <= points,
         next = pointsKnown && snapshot.free > 0 && order.len() > 0 && defs[order[0]].unlock <= snapshot.spent ? order[0] : null};
 };

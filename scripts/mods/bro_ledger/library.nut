@@ -1,6 +1,13 @@
-// Campaign-owned inert definitions. Built-in templates remain outside this flag.
+// Inert definitions owned by the player, not by one campaign. Built-in templates stay outside this store.
+// Campaign flags remain the legacy location and the one-way migration source.
 ::BroLedger.LibraryFlag <- "BroLedger.Library";
+::BroLedger.MovedFlag <- "BroLedger.LibraryMoved";
+::BroLedger.LibraryFile <- "Library";
 ::BroLedger.LibraryLimit <- 32;
+// A brother can spend at most 10 points, or 11 when Student refunds one. Mandatory picks obey that
+// budget. Flexible picks are alternates that yield to off-route perks, so they sit on top of it.
+::BroLedger.MandatoryLimit <- 11;
+::BroLedger.RouteLimit <- 20;
 ::BroLedger.ShareLimit <- 48000;
 ::BroLedger.WeaponTags <- ["Shield","Spear","Sword","Hammer","Axe","Mace","Flail","Cleaver","Whip","Dagger","Polearm","Bow","Crossbow","Throwing","Handgonne","Net","Two-handed","Light armour","Heavy armour"];
 ::BroLedger.PlaystyleTags <- ["Frontline","Backline","Tank","Damage","Control","Support","Hybrid","Duelist","Ranged","Mobile"];
@@ -36,13 +43,105 @@
         v!=::Math.round(v*100)/100.0) return false;
     return true;
 };
+// Named reasons a build cannot be saved, in the player's words. validBuild stays the authority:
+// it returns true exactly when this returns no problems.
+::BroLedger.buildProblems <- function(b, defs=null)
+{
+    local out=[];
+    if(typeof b!="table") return ["The build is not a valid record."];
+    foreach(k in ["id","label","targets","preferred","route","flex","weaponTags","playstyleTags"])
+        if(!(k in b)) return ["The build is missing its "+k+" field."];
+    if(!this.plainName(b.label,40)) {
+        local label=typeof b.label=="string" ? b.label : "";
+        if(typeof b.label!="string") out.push("Name: must be text.");
+        else if(label.len()>40) out.push("Name: "+label.len()+" characters; the limit is 40.");
+        else if(!this.validUTF8(label)) out.push("Name: contains characters the game cannot store.");
+        else out.push("Name: cannot be empty or only spaces.");
+    }
+    if(!this.validID(b.id)) out.push("Build ID is invalid.");
+    // Empty and 0 mean the same thing: the attribute is ignored.
+    if(typeof b.weights=="table") {
+        local bad=[];
+        foreach(k in this.Stats)
+            if(!(k in b.weights) || typeof b.weights[k]!="integer" || b.weights[k]<0 || b.weights[k]>10)
+                bad.push(this.StatNames[k]);
+        if(bad.len()>0) out.push("Weight must be a whole number 0-10 (empty means 0): "+this.joinWords(bad)+".");
+    }
+    else if("weights" in b) out.push("Weights are not a valid record.");
+    local badTarget=[];
+    foreach(values in [b.targets,b.preferred]) {
+        if(typeof values!="table") {out.push("Minimum and Ideal must be records.");break;}
+        foreach(k,v in values)
+            if(this.Stats.find(k)==null || !this.number(v) || v<0 || v>500 || v!=::Math.round(v*100)/100.0)
+                badTarget.push(k in this.StatNames ? this.StatNames[k] : k);
+    }
+    if(badTarget.len()>0) out.push("Minimum and Ideal must be numbers 0-500 with at most two decimals: "+this.joinWords(this.uniqueWords(badTarget))+".");
+    if(typeof b.targets=="table" && typeof b.preferred=="table") {
+        local pairs=[];
+        foreach(k,v in b.targets) if(!(k in b.preferred) || b.preferred[k]<v) pairs.push(k in this.StatNames ? this.StatNames[k] : k);
+        if(pairs.len()>0) out.push("Ideal must be set and at least the Minimum: "+this.joinWords(pairs)+".");
+        if(b.targets.len()!=b.preferred.len() && pairs.len()==0)
+            out.push("Every attribute with an Ideal needs a Minimum, and the reverse.");
+    }
+    if(typeof b.route!="array" || typeof b.flex!="array") return out.len()>0 ? out : ["Perk selection is not a valid list."];
+    local mandatory=[];
+    foreach(id in b.route) if(b.flex.find(id)==null) mandatory.push(id);
+    local cap=b.route.find("perk.student")!=null && b.flex.find("perk.student")==null ? this.MandatoryLimit : this.MandatoryLimit-1;
+    if(mandatory.len()>cap)
+        out.push("Too many mandatory perks: "+mandatory.len()+" chosen, at most "+cap+" fit in a brother's perk points"+
+            (cap==this.MandatoryLimit-1 ? " (11 with Student)" : "")+". Mark extras as Flexible or remove them.");
+    if(b.route.len()>this.RouteLimit)
+        out.push("Too many perks in total: "+b.route.len()+"; the list holds at most "+this.RouteLimit+" including flexible ones.");
+    if(!this.uniqueStrings(b.route,this.RouteLimit)) out.push("The same perk is listed more than once.");
+    if(!this.uniqueStrings(b.flex,this.RouteLimit)) out.push("The same flexible perk is marked more than once.");
+    foreach(id in b.flex) if(b.route.find(id)==null) {out.push("A flexible perk is not in the perk list.");break;}
+    if(mandatory.len()==this.MandatoryLimit && mandatory[this.MandatoryLimit-1]=="perk.student")
+        out.push("Student cannot be the last mandatory perk; its refund cannot pay for itself.");
+    local late=[];
+    foreach(i,id in b.route) {
+        if(!this.validString(id,80) || id.len()<6 || id.slice(0,5)!="perk.") {out.push("The perk list contains an invalid entry.");break;}
+        if(defs!=null && !(id in defs)) late.push(id+" is not available");
+        else if(defs!=null && defs[id].unlock>i) late.push(this.perkLabel(id,defs)+" needs "+defs[id].unlock+" earlier picks but sits at position "+(i+1));
+    }
+    if(late.len()>0) out.push("Perk order: "+this.joinWords(late)+".");
+    local badTag=[];
+    if(typeof b.weaponTags!="array" || typeof b.playstyleTags!="array") out.push("Tags are not a valid list.");
+    else {
+        if(!this.uniqueStrings(b.weaponTags,this.WeaponTags.len()) || !this.uniqueStrings(b.playstyleTags,this.PlaystyleTags.len()))
+            out.push("A tag is repeated.");
+        foreach(tag in b.weaponTags) if(this.WeaponTags.find(tag)==null) badTag.push(tag);
+        foreach(tag in b.playstyleTags) if(this.PlaystyleTags.find(tag)==null) badTag.push(tag);
+        if(badTag.len()>0) out.push("Unknown tag: "+this.joinWords(badTag)+".");
+    }
+    if(out.len()==0 && !this.validBuild(b,defs)) out.push("The build could not be saved.");
+    return out;
+};
+::BroLedger.joinProblems <- function(problems)
+{
+    if(problems.len()==1) return problems[0];
+    local out="This build cannot be saved yet:";
+    foreach(p in problems) out+="\n- "+p;
+    return out;
+};
+::BroLedger.uniqueWords <- function(values)
+{
+    local out=[];foreach(v in values) if(out.find(v)==null) out.push(v);return out;
+};
+::BroLedger.joinWords <- function(values)
+{
+    local out="";foreach(i,v in values) out+=(i==0 ? "" : i==values.len()-1 ? " and " : ", ")+v;return out;
+};
+::BroLedger.perkLabel <- function(id, defs)
+{
+    return defs!=null && id in defs && this.plainName(defs[id].name,80) ? defs[id].name : id;
+};
 ::BroLedger.validBuild <- function(b, defs=null)
 {
     if(typeof b!="table" || b.len()!=("weights" in b ? 9 : 8)) return false;
     foreach(k in ["id","label","targets","preferred","route","flex","weaponTags","playstyleTags"]) if(!(k in b)) return false;
     if(!this.validID(b.id) || !this.plainName(b.label,40) || !this.communityTargets(b.targets) ||
         !this.communityTargets(b.preferred) || b.targets.len()!=b.preferred.len() ||
-        !this.uniqueStrings(b.route,11) || !this.uniqueStrings(b.flex,11) ||
+        !this.uniqueStrings(b.route,this.RouteLimit) || !this.uniqueStrings(b.flex,this.RouteLimit) ||
         !this.uniqueStrings(b.weaponTags,this.WeaponTags.len()) || !this.uniqueStrings(b.playstyleTags,this.PlaystyleTags.len())) return false;
     foreach(k,v in b.targets) if(!(k in b.preferred) || b.preferred[k]<v) return false;
     if("weights" in b) {
@@ -50,8 +149,13 @@
         foreach(k in this.Stats) if(!(k in b.weights) || typeof b.weights[k]!="integer" || b.weights[k]<0 || b.weights[k]>10) return false;
     }
     foreach(id in b.flex) if(b.route.find(id)==null) return false;
-    if(b.route.len()>(b.route.find("perk.student")!=null ? 11 : 10)) return false;
-    if(b.route.len()==11 && b.route[10]=="perk.student") return false; // The refund cannot fund Student itself.
+    // Mandatory picks must fit the point budget; flexible alternates may exceed it.
+    local mandatory=[];
+    foreach(id in b.route) if(b.flex.find(id)==null) mandatory.push(id);
+    local cap=b.route.find("perk.student")!=null && b.flex.find("perk.student")==null ? this.MandatoryLimit : this.MandatoryLimit-1;
+    if(mandatory.len()>cap || b.route.len()>this.RouteLimit) return false;
+    // The refund cannot fund Student itself.
+    if(mandatory.len()==this.MandatoryLimit && mandatory[this.MandatoryLimit-1]=="perk.student") return false;
     foreach(i,id in b.route) {
         if(!this.validString(id,80) || id.len()<6 || id.slice(0,5)!="perk.") return false;
         if(defs!=null && (!(id in defs) || defs[id].unlock>i)) return false;
@@ -122,6 +226,8 @@
         return dot ? s.tofloat() : s.tointeger();
     };
     local count=integer(take(),this.LibraryLimit),out=[];
+    // Tag lists stay bounded by their own vocabularies; perk lists by the route limit.
+    local listLimit=this.RouteLimit>this.WeaponTags.len() ? this.RouteLimit : this.WeaponTags.len();
     for(local i=0;i<count;i++) {
         local b={id=take(),label=take(),targets={},preferred={},route=[],flex=[],weaponTags=[],playstyleTags=[]};
         if(weighted) b.weights<-{};
@@ -132,7 +238,7 @@
             if(weighted) b.weights[k]<-integer(take(),10);
         }
         foreach(values in [b.route,b.flex,b.weaponTags,b.playstyleTags]) {
-            local n=integer(take(),20);for(local j=0;j<n;j++) values.push(take());
+            local n=integer(take(),listLimit);for(local j=0;j<n;j++) values.push(take());
         }
         out.push(b);
     }
@@ -151,19 +257,49 @@
     if(importInfo!=null) importInfo.ignoredExtra<-at!=source.len();
     return out;
 };
-::BroLedger.readLibrary <- function(flags, defs)
+// The player-wide store keeps definitions outside any campaign save. `flags` stays the legacy
+// location: each campaign hands its bytes over once, then stops being an authority.
+// MSU PersistentData writes under mod_config/, which no campaign save owns.
+::BroLedger.LibraryFile <- "library";
+::BroLedger.libraryStore <- function()
 {
-    local raw=flags.has(this.LibraryFlag) ? flags.get(this.LibraryFlag) : null;
-    if(raw==null && !flags.has(this.LibraryFlag)) return {builds=[],issue=null,token=null};
-    try {return {builds=this.decodeBuilds(raw,defs),issue=null,token=raw};}
-    catch(e) {return {builds=[],issue="Library unavailable; saved bytes retained. "+e,token=raw};}
+    local mod=this.Mod,file=this.LibraryFile;
+    return {has=@() mod.PersistentData.hasFile(file),get=@() mod.PersistentData.readFile(file),
+        set=function(value){mod.PersistentData.createFile(file,value);}};
 };
-::BroLedger.writeLibrary <- function(flags, builds, defs)
+// One-way adoption. A campaign marked moved never contributes again, so builds deleted from the
+// player-wide library cannot reappear the next time that campaign is loaded.
+// Store access errors propagate; only unreadable campaign bytes degrade to a notice.
+::BroLedger.adoptLibrary <- function(store, flags, defs)
 {
-    if(this.readLibrary(flags,defs).issue!=null) throw "Unsupported or damaged library retained; import into another campaign.";
+    if(flags==null || !flags.has(this.LibraryFlag) || flags.has(this.MovedFlag)) return null;
+    local raw=flags.get(this.LibraryFlag);
+    if(typeof raw!="string") return null;
+    local held=store.has() ? store.get() : null,encoded=null;
+    try {
+        local incoming=this.decodeBuilds(raw,defs);
+        if(held!=null) incoming=this.mergeBuilds(this.decodeBuilds(held,defs),incoming,"skip",defs);
+        encoded=this.encodeBuilds(incoming,defs);
+    }
+    catch(e) {return "This campaign's saved builds could not be moved into your cross-campaign library; its bytes are retained. "+e;}
+    store.set(encoded);
+    flags.set(this.MovedFlag,true);
+    return null;
+};
+::BroLedger.readLibrary <- function(store, defs, flags=null)
+{
+    local notice=this.adoptLibrary(store,flags,defs);
+    if(!store.has()) return {builds=[],issue=null,token=null,notice=notice};
+    local raw=store.get();
+    try {return {builds=this.decodeBuilds(raw,defs),issue=null,token=raw,notice=notice};}
+    catch(e) {return {builds=[],issue="Library unavailable; saved bytes retained. "+e,token=raw,notice=notice};}
+};
+::BroLedger.writeLibrary <- function(store, builds, defs)
+{
+    if(this.readLibrary(store,defs).issue!=null) throw "Unsupported or damaged library retained; export it before saving again.";
     local encoded=this.encodeBuilds(builds,defs);
-    // Native tag_collection stores one string value; serialize/validate before the sole owning mutation.
-    flags.set(this.LibraryFlag,encoded);
+    // Serialize and validate before the sole owning write; a failed write leaves the stored bytes intact.
+    store.set(encoded);
     return encoded;
 };
 ::BroLedger.mergeBuilds <- function(existing, incoming, policy, defs)

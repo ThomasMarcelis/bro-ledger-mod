@@ -11,6 +11,8 @@ cases.replacement_conflicts_and_sunk_perks <- function() {
 
 cases.gifted_needs_obtainable_capacity <- function() {
     local b=userBuild(),s=calibratedBro(b,false),p=B.makePlan(b);
+    // Gifted must be mandatory here: a flexible pick is an alternate and no longer forces infeasibility.
+    p.flex=[];
     b.targets.hp<-60;p.targets.hp<-60;p.preferredTargets.hp<-70;
     s.perks.clear();foreach(id in b.route) if(id!="perk.gifted") s.perks[id]<-true;
     s.perks["perk.steel_brow"]<-true;s.spent=10;s.free=0;s.stats.hp=b.targets.hp-4;

@@ -48,10 +48,11 @@
 ::BroLedger.view <- function(actor, catalog, settings, library=null)
 {
     local state=this.actorState(actor),snapshot=this.readActor(actor),defs=this.perkDefs();
-    if(library==null) library=this.readLibrary(::World.Flags,defs);
+    if(library==null) library=this.readLibrary(this.libraryStore(),defs,::World.Flags);
     local out={actor=actor.getID(),name=actor.getName(),revision=state.revision,issue=state.issue,plan=null,
         stars=this.copy(snapshot.stars),notes=snapshot.notes,warnings=snapshot.warnings,defs=defs,builds=[],offer=null,
-        libraryIssue=library.issue,library=library.builds,starters=catalog ? this.StarterBuilds : [],
+        libraryIssue=library.issue,libraryNotice=("notice" in library ? library.notice : null),library=library.builds,
+        starters=catalog ? this.StarterBuilds : [],effects=this.currentEffects(actor,snapshot.perks),
         tagIcons=this.tagIcons(defs),weaponTags=this.WeaponTags,playstyleTags=this.PlaystyleTags};
     if(catalog) out.builds=this.compare(snapshot,defs,library.builds,this.StarterBuilds).builds;
     if(state.issue!=null || state.plan==null) return out;
@@ -63,7 +64,6 @@
     if(out.plan.route.next!=null && !actor.isPerkUnlockable(out.plan.route.next)) out.plan.route.next=null;
     out.plan.order<-this.copy(saved.route);
     out.plan.flex<-this.flexPerks(plan,snapshot,defs);
-    out.plan.effects<-this.currentEffects(actor,snapshot.perks);
     out.plan.options<-[];
     foreach(index,option in ("options" in plan ? plan.options : [])) {
         local active=plan.swaps.find(index)!=null,from=active ? option.with : option.replace;
@@ -96,7 +96,7 @@
     if(actor==null) return {error="Select a living company brother."};
     local state=this.actorState(actor),previous=state.plan,revision=state.revision;
     try {
-        local defs=this.perkDefs(),library=this.readLibrary(::World.Flags,defs),next=library.builds,changed=false,share=null,notice=null;
+        local defs=this.perkDefs(),store=this.libraryStore(),library=this.readLibrary(store,defs,::World.Flags),next=library.builds,changed=false,share=null,notice=library.notice;
         if(write || data.action=="export") {
             if(!("epoch" in data) || !("revision" in data) || data.epoch!=context.epoch ||
                 data.actor!=context.actor || data.revision!=state.revision || !("libraryToken" in context) || context.libraryToken!=library.token)
@@ -108,8 +108,10 @@
         if(["track","replace","enabled"].find(data.action)!=null && state.issue!=null) throw state.issue;
         if(["saveBuild","deleteBuild","import","export","track"].find(data.action)!=null && source=="library" && library.issue!=null) throw library.issue;
         if(data.action=="saveBuild") {
-            if(!("definition" in data) || !this.validBuild(data.definition,defs) || !("create" in data) || typeof data.create!="bool")
-                throw "Check name (40 bytes), target pairs (0–500, two decimals), whole weights (0–10), and legal perk order (10 perks, plus Student).";
+            if(!("definition" in data) || !("create" in data) || typeof data.create!="bool")
+                throw "Malformed save request.";
+            local problems=this.buildProblems(data.definition,defs);
+            if(problems.len()>0) throw this.joinProblems(problems);
             next=this.copy(next);local found=this.findBuild(data.definition.id,next);
             if(data.create && found!=null) throw "Build ID already exists. Refresh before creating.";
             if(!data.create && found==null) throw "Build was removed. Refresh before editing.";
@@ -125,7 +127,7 @@
             if(!("text" in data) || !("policy" in data)) throw "Paste share text and choose a duplicate policy.";
             local importInfo={};
             next=this.mergeBuilds(next,this.decodeBuilds(data.text,defs,importInfo),data.policy,defs);changed=true;
-            if(importInfo.ignoredExtra) notice="Extra text after the first build block was ignored.";
+            if(importInfo.ignoredExtra) notice=(notice==null ? "" : notice+" ")+"Extra text after the first build block was ignored.";
         }
         else if(data.action=="export") {
             if(!("build" in data) || (data.build!=null && typeof data.build!="string")) throw "Choose one build or the whole library.";
@@ -161,12 +163,12 @@
         }
         // Prepare the complete response before committing library bytes, so read errors cannot partially import.
         local result=this.view(actor,data.action!="refresh" && data.action!="enabled" && data.action!="replace",context.settings,
-            {builds=next,issue=library.issue});
+            {builds=next,issue=library.issue,notice=notice});
         result.epoch<-context.epoch;result.seq<-data.seq;result.title<-this.Name;result.settings<-context.settings;
         if(share!=null) result.share<-share;
         if(notice!=null) result.notice<-notice;
         result.newBuildID<-this.newBuildID(next);
-        local token=changed ? this.writeLibrary(::World.Flags,next,defs) : library.token;
+        local token=changed ? this.writeLibrary(store,next,defs) : library.token;
         context.seq=data.seq;context.actor=data.actor;
         context.libraryToken<-token;
         return result;

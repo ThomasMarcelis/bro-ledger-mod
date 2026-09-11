@@ -120,9 +120,9 @@ test('render hides global UI while retaining the compact plan', () => {
         owner.markPerks = () => {}; owner.renderOffer = () => {};
         const route = {next: 'perk.a', remaining: ['perk.a'], offplan: [], unknown: [], blocked: [], conflicts: [], feasible: true};
         owner.data = {settings: {Enabled: true, PerkHighlights: false}, defs: {'perk.a': {name: 'Perk sentinel'}}, notes: [], warnings: [],
+            effects: Object.fromEntries(['dodge', 'nimble', 'battleForged'].map(id => [id, {owned: false, value: null}])),
             plan: {label: 'Saved route', enabled: true, score: 50, projection: {horizon: 11}, statRows: [], route,
-                weapons: 'Equipment sentinel', equipment: null,
-                effects: Object.fromEntries(['dodge', 'nimble', 'battleForged'].map(id => [id, {owned: false, value: null}]))}};
+                weapons: 'Equipment sentinel', equipment: null}};
         owner.render();
         assert.equal(visibility.at(-1), true); assert.ok(lines.includes('Saved route'));
         assert.ok(!lines.includes('Equipment sentinel'));
@@ -130,5 +130,49 @@ test('render hides global UI while retaining the compact plan', () => {
         owner.render();
         assert.equal(visibility.at(-1), false); assert.deepEqual(lines, []); assert.deepEqual(classes, []);
         assert.equal(owner.data.plan.label, 'Saved route');
+    } finally { global.$ = previous; }
+});
+
+// Hélder's requirement: the three defence lines belong to the brother, not to a tracked build, and a
+// perk he never took must not appear at all.
+test('learned defence perks show on the sheet without a tracked build and absent perks stay hidden', () => {
+    const lines = [], visibility = [], classes = [], removed = [];
+    const node = {find() { return this; }, each() {}, empty() { return this; }, hide() { return this; },
+        show() { return this; }, toggleClass() { return this; }, addClass(value) { classes.push(value); return this; },
+        removeClass(value) { removed.push(value); return this; },
+        text(value) { lines.push(value); return this; }, appendTo() { return this; },
+        css() { return this; }, position() { return {top: 0}; }, outerHeight() { return 0; },
+        bindTooltip() {}, unbindTooltip() {},
+        attr() { return this; }, on() { return this; }, closest() { return this; }, trigger() { return this; },
+        createTextButton() { return this; }, createList() { return this; }, findListScrollContainer() { return this; }};
+    const previous = global.$; global.$ = () => node;
+    try {
+        const owner = new Controller({mContainer: node});
+        owner.visible = true; owner.actor = 7;
+        owner.panel = node; owner.entry = {toggle(value) { visibility.push(value); }};
+        owner.markPerks = () => {}; owner.renderOffer = () => {};
+        owner.data = {settings: {Enabled: true, PerkHighlights: false}, defs: {}, notes: [], warnings: [], plan: null,
+            effects: {dodge: {owned: true, value: 17}, nimble: {owned: false, value: null},
+                battleForged: {owned: true, value: 32.7}}};
+        owner.render();
+
+        assert.equal(visibility.at(-1), true, 'sheet entry hidden without a tracked build');
+        assert.ok(lines.includes('Dodge Def') && lines.includes('+17'), 'learned Dodge missing without a plan');
+        assert.ok(lines.includes('Forged Armour DR') && lines.includes('32.7%'), 'learned Battle Forged missing without a plan');
+        assert.ok(!lines.some(line => line.indexOf('Nimble') !== -1), 'unlearned Nimble was rendered');
+        assert.ok(!classes.includes('bl-with-plan'), 'plan-sized frame applied without a plan');
+
+        // An owned-but-unreadable effect still names the perk rather than inventing a number.
+        lines.length = 0;
+        owner.data.effects = {dodge: {owned: true, value: null}, nimble: {owned: false, value: null},
+            battleForged: {owned: false, value: null}};
+        owner.render();
+        assert.ok(lines.includes('Dodge Def') && lines.includes('?'), 'owned Dodge vanished or invented a value when unreadable');
+
+        // A brother with none of the three keeps the panel closed rather than showing an empty block.
+        lines.length = 0; classes.length = 0;
+        owner.data.effects = Object.fromEntries(['dodge', 'nimble', 'battleForged'].map(id => [id, {owned: false, value: null}]));
+        owner.render();
+        assert.deepEqual(lines, [], 'panel rendered text with no learned perks and no plan');
     } finally { global.$ = previous; }
 });

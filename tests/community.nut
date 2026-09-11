@@ -1,6 +1,6 @@
 local B=::BroLedger, cases={}, defs=dofile("tests/perk_unlocks.nut");
 cases.empty_library_and_roundtrip <- function() {
-    local flags=libraryFlags();check(B.readLibrary(flags,defs).builds.len()==0,"initial library not empty");
+    local store=libraryStore();check(B.readLibrary(store,defs).builds.len()==0,"initial library not empty");
     local a=userBuild(),b=userBuild("user_2");b.label="<b>[color=red]literal & text";
     foreach(list in [[],[a],[a,b]]) check(same(B.decodeBuilds(B.encodeBuilds(list,defs),defs),list),"share roundtrip lost data");
 };
@@ -43,8 +43,8 @@ cases.trailing_diagnostic_integrity <- function() {
     }
 };
 cases.library_collision_and_rollback <- function() {
-    local flags=libraryFlags(),lib=B.readLibrary(flags,defs),a=userBuild();
-    B.writeLibrary(flags,[a],defs);local before=flags.get(B.LibraryFlag);
+    local store=libraryStore(),lib=B.readLibrary(store,defs),a=userBuild();
+    B.writeLibrary(store,[a],defs);local before=store.get();
     check(rejects(@() B.mergeBuilds([a],[a],"reject",defs)),"duplicate silently accepted");
     check(B.mergeBuilds([a],[a],"skip",defs).len()==1,"explicit skip changed library");
     local copy=B.mergeBuilds([a],[a],"copy",defs);check(copy.len()==2 && copy[0].id!=copy[1].id,"copy collision not resolved");
@@ -54,10 +54,30 @@ cases.library_collision_and_rollback <- function() {
     local firstCopy=userBuild("user_4");firstCopy.label="TankFighter (copy 1)";
     copy=B.mergeBuilds([a,occupied,firstCopy],[a],"copy",defs);
     check(copy[3].label!=occupied.label && copy[3].label!=firstCopy.label,"copy suffix search did not skip occupied names");
-    local broken={has=flags.has,get=flags.get,set=function(k,v){throw "disk failure";},remove=flags.remove};
-    check(rejects(@() B.writeLibrary(broken,[],defs)) && flags.get(B.LibraryFlag)==before,"failed save changed library");
-    flags.set(B.LibraryFlag,"BL99|private future bytes");lib=B.readLibrary(flags,defs);
-    check(lib.issue!=null && rejects(@() B.writeLibrary(flags,[],defs)) && flags.get(B.LibraryFlag)=="BL99|private future bytes","future library overwritten");
+    local broken={has=store.has,get=store.get,set=function(v){throw "disk failure";}};
+    check(rejects(@() B.writeLibrary(broken,[],defs)) && store.get()==before,"failed save changed library");
+    store.set("BL99|private future bytes");lib=B.readLibrary(store,defs);
+    check(lib.issue!=null && rejects(@() B.writeLibrary(store,[],defs)) && store.get()=="BL99|private future bytes","future library overwritten");
+};
+// The library belongs to the player: a second campaign sees the same builds, and the campaign that
+// donated its legacy bytes never re-donates them after the player deletes builds globally.
+cases.library_survives_campaigns_and_adopts_once <- function() {
+    local a=userBuild(),b=userBuild("user_2");b.label="Second";
+    local store=libraryStore(),first=libraryFlags(),second=libraryFlags();
+    B.writeLibrary(store,[a],defs);
+    check(B.readLibrary(store,defs,second).builds.len()==1,"new campaign lost the player's library");
+    check(!second.has(B.MovedFlag),"campaign without legacy bytes was marked migrated");
+    local legacy=libraryFlags();legacy.set(B.LibraryFlag,B.encodeBuilds([b],defs));
+    local lib=B.readLibrary(store,defs,legacy);
+    check(lib.builds.len()==2 && lib.issue==null && lib.notice==null,"legacy campaign builds were not adopted");
+    check(legacy.has(B.MovedFlag) && legacy.get(B.LibraryFlag)!=null,"adoption did not mark or preserve the legacy campaign");
+    check(B.readLibrary(store,defs,legacy).builds.len()==2,"repeated load duplicated adopted builds");
+    B.writeLibrary(store,[a],defs);
+    check(B.readLibrary(store,defs,legacy).builds.len()==1,"a deleted build reappeared from the donating campaign");
+    local damaged=libraryFlags();damaged.set(B.LibraryFlag,"BL99|unreadable");
+    lib=B.readLibrary(store,defs,damaged);
+    check(lib.notice!=null && lib.issue==null && lib.builds.len()==1 && !damaged.has(B.MovedFlag),
+        "unreadable campaign bytes were not reported or destroyed the player's library");
 };
 cases.gradual_threshold_and_joint_budget <- function() {
     local b=userBuild(),p=B.makePlan(b),s=fixture();s.normalRows=0;s.free=0;s.futurePerks=0;
@@ -113,11 +133,57 @@ cases.invalid_utf8_cannot_enter_names <- function() {
 cases.full_student_route_and_empty_perks <- function() {
     local b=userBuild();b.route=["perk.student","perk.colossus","perk.gifted","perk.fortified_mind","perk.mastery.hammer",
         "perk.reach_advantage","perk.battle_forged","perk.underdog","perk.killing_frenzy","perk.berserk","perk.fearsome"];
-    b.flex=["perk.gifted","perk.fearsome"];check(B.validBuild(b,defs),"legal full route rejected");
+    b.flex=[];check(B.validBuild(b,defs),"legal full mandatory route rejected");
     local delayed=B.copy(b);delayed.route.remove(0);delayed.route.push("perk.student");
     check(!B.validBuild(delayed,defs),"Student borrowed its own eleventh acquisition point");
-    b.route[0]="perk.pathfinder";check(!B.validBuild(b,defs),"11 non-Student perks accepted");
+    // Student last is legal once it is flexible: it is an alternate, not the eleventh commitment.
+    local flexible=B.copy(delayed);flexible.flex=["perk.student"];
+    check(B.validBuild(flexible,defs),"flexible Student in the last position rejected");
+    b.route[0]="perk.pathfinder";check(!B.validBuild(b,defs),"11 mandatory non-Student perks accepted");
+    // Hélder's case: 10 mandatory perks plus several flexible alternates on top.
+    local wide=userBuild();
+    wide.route=["perk.colossus","perk.gifted","perk.fortified_mind","perk.mastery.hammer","perk.reach_advantage",
+        "perk.battle_forged","perk.underdog","perk.killing_frenzy","perk.berserk","perk.fearsome",
+        "perk.pathfinder","perk.student","perk.nine_lives","perk.dodge"];
+    wide.flex=["perk.pathfinder","perk.student","perk.nine_lives","perk.dodge"];
+    check(B.validBuild(wide,defs),"10 mandatory plus 4 flexible perks rejected");
+    check(same(B.decodeBuilds(B.encodeBuilds([wide],defs),defs)[0],wide),"wide build lost data in share roundtrip");
+    local overCommitted=B.copy(wide);overCommitted.flex=["perk.dodge"];
+    check(!B.validBuild(overCommitted,defs),"13 mandatory perks accepted");
+    local tooMany=userBuild();tooMany.route=[];tooMany.flex=[];
+    for(local i=0;i<B.RouteLimit+1;i++) tooMany.route.push("perk.slot_"+i);
+    check(!B.validBuild(tooMany,defs),"route beyond the list limit accepted");
     b.route=[];b.flex=[];check(B.validBuild(b,defs),"deliberately empty route rejected");
+};
+// Hélder could not tell why a save was refused. Each cause must name itself.
+cases.save_problems_name_their_cause <- function() {
+    local ok=userBuild();
+    check(B.buildProblems(ok,defs).len()==0,"valid build reported a problem");
+    local named=function(b,needle,why) {
+        local problems=B.buildProblems(b,defs);
+        check(problems.len()>0,why+" produced no problem");
+        local hit=false;foreach(p in problems) if(p.find(needle)!=null) hit=true;
+        check(hit,why+" was not named: "+B.joinProblems(problems));
+    };
+    local long=userBuild();long.label="";for(local i=0;i<41;i++) long.label+="x";
+    named(long,"40","overlong name");
+    local blank=userBuild();blank.label="   ";named(blank,"Name","blank name");
+    local badWeight=userBuild();badWeight.weights.hp=11;
+    named(badWeight,"Weight","out-of-range weight");
+    local textWeight=userBuild();textWeight.weights.hp="";
+    named(textWeight,"Weight","non-numeric weight");
+    // A missing Ideal beside a Minimum is a real cause and must say so.
+    local lonely=userBuild();lonely.preferred={};named(lonely,"Ideal","minimum without an ideal");
+    local over=userBuild();over.route=[];over.flex=[];
+    for(local i=0;i<12;i++) over.route.push("perk.slot_"+i);
+    named(over,"mandatory","12 mandatory perks");
+    local badTarget=userBuild();badTarget.targets.matk=501;named(badTarget,"0-500","out-of-range target");
+    // A zero weight must be as acceptable as an omitted one: ignoring a stat is not an error.
+    local ignored=userBuild();ignored.weights.rdef=0;ignored.weights.ratk=0;
+    check(B.buildProblems(ignored,defs).len()==0,"ignoring individual stats was refused");
+    // Several faults at once are reported together, not one at a time.
+    local many=B.copy(long);many.targets.matk=501;
+    check(B.buildProblems(many,defs).len()>=2,"multiple faults collapsed into one message");
 };
 cases.individual_bound_unknown_and_finite_witness <- function() {
     local b=userBuild();b.route=[];b.flex=[];b.targets={};b.preferred={};

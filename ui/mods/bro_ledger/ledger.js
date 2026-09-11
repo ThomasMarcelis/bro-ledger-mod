@@ -1,6 +1,8 @@
 var BroLedgerUI = (function () {
     'use strict';
     var sequence = 0;
+    // Mandatory picks must fit a brother's perk points; flexible alternates sit on top of that.
+    var MANDATORY_LIMIT = 11, ROUTE_LIMIT = 20;
     var names = {hp: 'HP', resolve: 'Resolve', fatigue: 'Fatigue', initiative: 'Initiative',
         matk: 'Melee skill', ratk: 'Ranged skill', mdef: 'Melee defence', rdef: 'Ranged defence'};
     var offerFields = {hp: 'hitpointsIncrease', resolve: 'braveryIncrease', fatigue: 'fatigueIncrease',
@@ -101,7 +103,8 @@ var BroLedgerUI = (function () {
         var parent=this.popup ? this.popup.findPopupDialogContentContainer() : this.panel;
         parent.find('.bl-error').remove();
         var error = $('<div class="bl-error bl-warning"/>').appendTo(parent);
-        text(error,message);
+        // Multi-reason messages arrive newline-separated; one div per line keeps them readable.
+        String(message).split('\n').forEach(function (line) { if (line !== '') text(error, line); });
         if (!this.popup) {
             parent.show(); this.screen.mContainer.addClass('bl-with-plan');
             if (!this.data || !this.data.plan || !this.data.plan.enabled || this.data.issue) parent.addClass('bl-failure');
@@ -169,30 +172,42 @@ var BroLedgerUI = (function () {
         });
         if (!plan.route.feasible) text(parent, 'Route blocked: unlocks, spent points or missing perks.').addClass('bl-warning bl-route-status');
     };
+    // Learned perks only: an absent perk has no line, so the sheet stays quiet for brothers without them.
     Controller.prototype.effects = function (parent, effects) {
+        var shown = 0;
         [['dodge','Dodge','Def'],['nimble','Nimble','HP DR'],['battleForged','Forged','Armour DR']].forEach(function (spec) {
-            var effect = effects[spec[0]], value = !effect.owned ? '—' : effect.value === null ? '?' :
+            var effect = effects && effects[spec[0]];
+            if (!effect || !effect.owned) return;
+            shown++;
+            var value = effect.value === null ? '?' :
                 spec[0] === 'dodge' ? '+' + effect.value : Number(effect.value.toFixed(1)) + '%';
             var row = $('<div class="bl-effect text-font-normal"/>').appendTo(parent);
             tooltip($('<span/>').text(spec[1] + ' ' + spec[2]).appendTo(row), spec[0]);
-            $('<span class="bl-effect-value"/>').text(value).attr('title', effect.owned ? 'Current value' : 'Not learned').appendTo(row);
+            $('<span class="bl-effect-value"/>').text(value).attr('title', 'Current value').appendTo(row);
         });
+        return shown;
     };
     Controller.prototype.render = function () {
         if (!this.panel) return;
-        disposeLists(this.panel); this.panel.empty().hide().removeClass('bl-failure'); this.screen.mContainer.removeClass('bl-with-plan');
+        disposeLists(this.panel); this.panel.empty().hide().removeClass('bl-failure bl-with-plan-body'); this.screen.mContainer.removeClass('bl-with-plan');
         var self = this, data = this.data, plan = data && data.plan;
         var enabled = data ? data.settings.Enabled : this.enabled;
         this.entry.toggle(this.visible && this.actor !== null && enabled !== false); this.markPerks();
-        if (!this.visible || !data || !data.settings.Enabled || !plan || !plan.enabled || data.issue) { this.renderOffer(); return; }
-        this.panel.show(); this.screen.mContainer.addClass('bl-with-plan');
+        if (!this.visible || !data || !data.settings.Enabled) { this.renderOffer(); return; }
+        // Learned Dodge/Nimble/Battle Forged are facts about the brother, so they do not wait for a tracked build.
+        if (!plan || !plan.enabled || data.issue) {
+            var loose = $('<div class="bl-effects bl-effects-only"/>');
+            if (this.effects(loose, data.effects)) { loose.appendTo(this.panel); this.panel.show(); }
+            this.renderOffer(); return;
+        }
+        this.panel.show().addClass('bl-with-plan-body'); this.screen.mContainer.addClass('bl-with-plan');
         text(this.panel, plan.label, true).addClass('bl-plan-title');
         var controls = $('<div class="bl-controls"/>').appendTo(this.panel);
         button(controls, 'Change build', function () { self.evaluate(); });
         button(controls, 'Disable', function () { self.request('enabled', {enabled:false}); });
         this.targets(this.panel, plan, data.stars, true);
         this.perkOrder(this.panel, plan, data.defs, true);
-        this.effects($('<div class="bl-effects"/>').appendTo(this.panel), plan.effects);
+        this.effects($('<div class="bl-effects"/>').appendTo(this.panel), data.effects);
         this.renderOffer();
     };
     Controller.prototype.evaluate = function () {
@@ -340,7 +355,7 @@ var BroLedgerUI = (function () {
         var fields=$('<div class="bl-board-fields"/>').appendTo(main),left=$('<div class="bl-board-targets"/>').appendTo(fields);
         var middle=$('<div class="bl-board-perks"/>').appendTo(fields),right=$('<div class="bl-board-order"/>').appendTo(board);
         text(left,'Attributes Ranges',true);text(left,'Ranges: 0–500, two decimals. Blank pair = ignored.');
-        text(left,'Weight 0–10: 0 ignores; 2 = twice 1.');
+        text(left,'Weight 0–10: 0 or empty ignores the attribute; 2 = twice 1.');
         var targetTable=$('<table class="bl-targets bl-input-targets"/>').appendTo(left),inputs={};
         var targetHead=$('<tr/>').appendTo($('<thead/>').appendTo(targetTable));
         ['Attribute','Minimum','Ideal','Weight'].forEach(function(label){$('<th/>').text(label).appendTo(targetHead);});
@@ -351,7 +366,8 @@ var BroLedgerUI = (function () {
                 .val(b[field][k]===undefined?'':b[field][k]).appendTo($('<td/>').appendTo(row)));});
             var weight=$('<input type="text" inputmode="numeric" maxlength="2"/>').attr('aria-label',names[k]+' Weight')
                 .val(b.weights[k]===undefined?1:b.weights[k]).appendTo($('<td/>').appendTo(row));inputs[k].push(weight);
-            function ignored(){var off=weight.val().trim()==='0'||(inputs[k][0].val().trim()===''&&inputs[k][1].val().trim()==='');
+            function ignored(){var w=weight.val().trim();
+                var off=w==='0'||w===''||(inputs[k][0].val().trim()===''&&inputs[k][1].val().trim()==='');
                 row.toggleClass('bl-ignored',off);label.text(names[k]+(off?' · Ignored':''));}
             inputs[k].forEach(function(input){input.on('input change',ignored);});ignored();
         });
@@ -366,11 +382,24 @@ var BroLedgerUI = (function () {
         }
         tags(left,'Playstyle',data.playstyleTags,'playstyleTags');
         text(middle,'Perks · click to add / remove',true);
-        var tree=$('<div class="bl-perk-tree"/>').appendTo(middle),header=$('<div class="bl-order-header"/>').appendTo(right);
+        var tree=$('<div class="bl-perk-tree"/>').appendTo(middle);
+        // A real element, because a native title attribute is not a reliable hover surface here.
+        var describe=$('<div class="bl-perk-description text-font-normal"/>').appendTo(middle);
+        var describeTitle=$('<div class="bl-perk-description-title title-font-normal font-bold"/>').appendTo(describe);
+        var describeBody=$('<div/>').appendTo(describe);
+        var describeDefault='Hover a perk to read what it does.';
+        describeBody.text(describeDefault);
+        function showPerk(def){
+            if(!def){describeTitle.text('');describeBody.text(describeDefault);return;}
+            describeTitle.text(def.name+' · '+def.unlock+' earlier picks');
+            describeBody.text(def.description||'No description available.');
+        }
+        var header=$('<div class="bl-order-header"/>').appendTo(right);
         text(header,'Perk order',true);var count=text(header,'');
         text(header,'A flexible pick can yield to an off-route perk you learn manually.');
         var listHost=$('<div class="bl-order-list-host"/>').appendTo(right);
-        var list=listHost.createList(8,'bl-scroll bl-order-scroll',true),order=list.findListScrollContainer().addClass('bl-edit-route');
+        // 8px per notch made a 20-perk list take ~47 wheel notches to cross; one row per notch.
+        var list=listHost.createList(56,'bl-scroll bl-order-scroll',true),order=list.findListScrollContainer().addClass('bl-edit-route');
         var viewport=list.aciScrollBar('container');
         // The native control allows wheel events to bubble at the ends of its list.
         list.on('mousewheel',function(e){e.preventDefault();e.stopPropagation();});
@@ -386,9 +415,15 @@ var BroLedgerUI = (function () {
         this.editorResize=layoutOrder;$(window).on('resize',layoutOrder);
         function tiny(parent,label,title,action){return $('<button type="button" class="bl-small"/>').text(label).attr('title',title).on('click',action).appendTo(parent);}
         var routeVersion=0;
+        function updateCount(){
+            var mandatory=b.route.filter(function(id){return b.flex.indexOf(id)===-1;}).length;
+            var cap=b.route.indexOf('perk.student')!==-1&&b.flex.indexOf('perk.student')===-1?MANDATORY_LIMIT:MANDATORY_LIMIT-1;
+            count.text(mandatory+' mandatory / '+(b.route.length-mandatory)+' flexible · at most '+cap+' mandatory')
+                .toggleClass('bl-warning',mandatory>cap);
+        }
         function drawRoute(revealID,direction){
             var version=++routeVersion,scrollTop=viewport.scrollTop(),reveal=null,focus=null;
-            disposeCheckboxes(order);order.empty();count.text(b.route.length+' picks · unchecked = mandatory');
+            disposeCheckboxes(order);order.empty();updateCount();
             b.route.forEach(function(id,i){
                 var row=$('<div class="bl-edit-perk text-font-normal"/>').attr('data-perk',id).appendTo(order);
                 $('<span/>').text((i+1)+'. '+perkName(id,data.defs)).appendTo(row);
@@ -397,7 +432,9 @@ var BroLedgerUI = (function () {
                 var down=tiny(actions,'Dn','Move later',function(){if(self.current(data,popup)&&version===routeVersion&&i<b.route.length-1){b.route.splice(i+1,0,b.route.splice(i,1)[0]);drawRoute(id,'down');}}).prop('disabled',i===b.route.length-1);
                 var label=$('<label class="bl-flex-control"/>').appendTo(actions);$('<span/>').text('Flexible').appendTo(label);
                 checkbox(label,b.flex.indexOf(id)!==-1,function(checked){if(!self.current(data,popup)||version!==routeVersion)return;
-                    var at=b.flex.indexOf(id);if(checked&&at===-1)b.flex.push(id);else if(!checked&&at!==-1)b.flex.splice(at,1);});
+                    var at=b.flex.indexOf(id);if(checked&&at===-1)b.flex.push(id);else if(!checked&&at!==-1)b.flex.splice(at,1);
+                    // Only the tally changes; redrawing here would destroy the iCheck box mid-event.
+                    updateCount();});
                 if(!data.defs[id]||data.defs[id].unlock>i)row.addClass('bl-target-impossible').attr('title',!data.defs[id]?'Perk unavailable.':'Requires '+data.defs[id].unlock+' earlier picks. Reorder or add earlier-tier perks.');
                 if(id===revealID){reveal=row;if(direction)focus=direction==='up'?(i>0?up:down):(i<b.route.length-1?down:up);}
             });
@@ -413,9 +450,12 @@ var BroLedgerUI = (function () {
         Object.keys(data.defs).sort(function(a,c){return data.defs[a].row-data.defs[c].row||data.defs[a].column-data.defs[c].column;}).forEach(function(id){
             var def=data.defs[id];
             if(tier!==def.row){tier=def.row;treeRow=$('<div class="bl-perk-tier"/>').appendTo(tree);}
-            var node=$('<button type="button" class="bl-perk-choice"/>').attr('data-perk',id).attr('title',def.name+' · '+def.unlock+' earlier picks').attr('aria-label',def.name).appendTo(treeRow);
+            var node=$('<button type="button" class="bl-perk-choice"/>').attr('data-perk',id).attr('aria-label',def.name).appendTo(treeRow);
+            // The native tree's own description, so hovering explains the perk before you pick it.
+            node.attr('title',def.name+' · '+def.unlock+' earlier picks'+(def.description?'\n\n'+def.description:''));
             if(def.icon)$('<img/>').attr('src',Path.GFX+def.icon).attr('alt',def.name).appendTo(node);else node.text(def.name);
-            node.on('click',function(){if(!self.current(data,popup))return;var at=b.route.indexOf(id),added=at===-1;if(added){if(b.route.length>=11){self.showError('At most 11 picks, including Student. Remove a perk first.');return;}b.route.push(id);}else{b.route.splice(at,1);at=b.flex.indexOf(id);if(at!==-1)b.flex.splice(at,1);}drawRoute(added?id:null);});
+            node.on('mouseenter focus',function(){showPerk(def);}).on('mouseleave blur',function(){showPerk(null);});
+            node.on('click',function(){if(!self.current(data,popup))return;var at=b.route.indexOf(id),added=at===-1;if(added){if(b.route.length>=ROUTE_LIMIT){self.showError('The perk list holds at most '+ROUTE_LIMIT+' perks. Remove one first.');return;}b.route.push(id);}else{b.route.splice(at,1);at=b.flex.indexOf(id);if(at!==-1)b.flex.splice(at,1);}drawRoute(added?id:null);});
         });
         tags(middle,'Weapon / equipment',data.weaponTags,'weaponTags');drawRoute();
         popup.addPopupDialogCancelButton(function(){if(self.popup===popup)self.evaluate();});
@@ -423,7 +463,10 @@ var BroLedgerUI = (function () {
             if(!self.current(data,popup))return;b.label=name.val();b.targets={};b.preferred={};
             Object.keys(inputs).forEach(function(k){var values=inputs[k];['targets','preferred'].forEach(function(field,i){
                 var value=values[i].val().trim();if(value!=='')b[field][k]=/^\d+(\.\d{1,2})?$/.test(value)?Number(value):value;
-            });var weight=values[2].val().trim();b.weights[k]=/^\d+$/.test(weight)?Number(weight):weight;});
+            });
+            // An empty weight means the attribute is ignored, exactly like an explicit 0.
+            var weight=values[2].val().trim();
+            b.weights[k]=weight===''?0:(/^\d+$/.test(weight)?Number(weight):weight);});
             self.request('saveBuild',{definition:b,create:!original||!!copy},function(reply){self.compare(reply);});
         });
     };
@@ -431,7 +474,7 @@ var BroLedgerUI = (function () {
         var self=this,popup=this.dialog(exported===null?'Import builds':'Export builds');popup.addClass('bl-sharing');
         var body=$('<div class="bl-share-body"/>').appendTo(popup.findPopupDialogContentContainer());
         text(body,exported===null?'Paste a single or bulk BL1 or BL2 string. Imports apply together.':'Select text, then Ctrl+C. Paste into another campaign or share with a player.',true);
-        text(body,'Library belongs to this campaign; save the campaign to retain edits. Tracked snapshots stay independent.');
+        text(body,'Your build library is shared across campaigns. Tracked plans stay with each brother.');
         var area=$('<textarea class="bl-share-text" spellcheck="false" maxlength="48000"/>').attr('aria-label','Build share text').val(exported||'').prop('readOnly',exported!==null).appendTo(body);
         if(exported===null)button(body,'Paste clipboard',function(){
             if(!self.current(data,popup))return;

@@ -153,6 +153,34 @@ test('perk icons toggle flex/order without allowing an unbounded draft route',()
     click(s.button('Save build'));assert.deepEqual(s.calls[0].request.definition.route,['perk.gifted','perk.colossus']);
 });
 
+test('hovering a perk describes it, and the counter separates mandatory from flexible',()=>{
+    const s=fixture(0),ids=['perk.student','perk.a','perk.b'];
+    s.data.defs=Object.fromEntries(ids.map((id,i)=>[id,{name:'Pick '+i,unlock:0,row:0,column:i,
+        description:id==='perk.a'?'Grants a real effect.':''}]));
+    click(s.button('Create build'));
+    const choices=s.byClass('bl-perk-choice'),describe=s.byClass('bl-perk-description')[0];
+    // The stub's text() reads one node, so assert on the title and body children directly.
+    const paneTitle=()=>describe.children[0].text(),pane=()=>describe.children[1].text();
+    // Before hovering, the pane invites the player rather than showing a stale perk.
+    assert.match(pane(),/Hover a perk/);
+    choices[1].trigger('mouseenter');
+    assert.match(pane(),/Grants a real effect\./);
+    choices[1].trigger('mouseleave');
+    assert.match(pane(),/Hover a perk/);
+    // A perk with no description says so instead of rendering an empty pane.
+    choices[2].trigger('mouseenter');
+    assert.match(pane(),/No description available\./);
+    // Two picks, one marked flexible: the counter must not call both mandatory.
+    click(choices[1]);click(choices[2]);
+    // The counter is the header's second child; the header node itself holds only its own label.
+    const counter=()=>s.byClass('bl-order-header')[0].children[1].text();
+    assert.match(counter(),/2 mandatory/);
+    const flex=s.byClass('bl-edit-perk')[0].children[1].children[2].children[0];
+    flex.prop('checked',true).trigger('ifChecked');
+    assert.match(counter(),/1 mandatory/);
+    assert.match(counter(),/1 flexible/);
+});
+
 test('native order list survives edits, contains wheel events and disposes resize callbacks',()=>{
     const s=fixture(1);s.owner.editor(s.data,s.data.library[0]);
     const list=s.byClass('bl-order-scroll')[0],viewport=list.aciScrollBar('container');
@@ -197,23 +225,24 @@ test('editor follows source positions and keeps selected perks through reorder, 
     s.owner.editor(s.data,request.definition);
     assert.deepEqual(s.byClass('bl-perk-choice').filter(n=>n.attr('aria-pressed')).map(n=>n.attr('data-perk')),request.definition.route);
 });
-test('source order wins over names, unlocks and object order; clean-sheet clicks allow any tier and cap at eleven',()=>{
-    const s=fixture(0),ids=Array.from({length:12},(_,i)=>i===0?'perk.student':'perk.pick_'+i);
+test('source order wins over names, unlocks and object order; clean-sheet clicks allow any tier and cap at the list limit',()=>{
+    const s=fixture(0),ids=Array.from({length:22},(_,i)=>i===0?'perk.student':'perk.pick_'+i);
     s.data.defs=Object.fromEntries(ids.slice().reverse().map(id=>{
-        const i=ids.indexOf(id);return [id,{name:'Pick '+(12-i),unlock:11-i,row:i<4?0:2,column:i<4?i:i-4}];
+        const i=ids.indexOf(id);return [id,{name:'Pick '+(22-i),unlock:21-i,row:i<4?0:2,column:i<4?i:i-4}];
     }));
     click(s.button('Create build'));
     const choices=s.byClass('bl-perk-choice');
     assert.deepEqual(choices.map(n=>n.attr('data-perk')),ids);
-    assert.equal(choices[0].attr('aria-label'),'Pick 12');
-    assert.equal(choices[0].attr('title'),'Pick 12 · 11 earlier picks');
-    choices.slice(0,11).forEach(click);click(choices[11]);
-    assert.equal(choices[11].attr('aria-pressed'),false);assert.equal(s.byClass('bl-error').length,1);
-    click(choices[5]);click(choices[11]);
-    assert.equal(choices[5].attr('aria-pressed'),false);assert.equal(choices[11].attr('aria-pressed'),true);
+    assert.equal(choices[0].attr('aria-label'),'Pick 22');
+    assert.equal(choices[0].attr('title'),'Pick 22 · 21 earlier picks');
+    // 20 fit; the 21st is refused because the list itself is full, not because of the perk budget.
+    choices.slice(0,20).forEach(click);click(choices[20]);
+    assert.equal(choices[20].attr('aria-pressed'),false);assert.equal(s.byClass('bl-error').length,1);
+    click(choices[5]);click(choices[20]);
+    assert.equal(choices[5].attr('aria-pressed'),false);assert.equal(choices[20].attr('aria-pressed'),true);
     assert.deepEqual(s.calls,[]);click(s.button('Save build'));
     assert.equal(s.calls[0].request.create,true);
-    assert.deepEqual(s.calls[0].request.definition.route,ids.filter((_,i)=>i!==5));
+    assert.deepEqual(s.calls[0].request.definition.route,ids.slice(0,21).filter((_,i)=>i!==5));
 });
 
 test('weights retain ignored ranges, validate at the backend, and native checkbox events relay tags',()=>{

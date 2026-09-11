@@ -16,10 +16,13 @@ try
         "systems/mod_settings/mod_settings_system", "systems/tooltips/abstract_tooltip",
         "systems/tooltips/tooltips/basic_tooltip", "systems/tooltips/tooltips_mod_addon", "systems/tooltips/tooltips_system"]) dofile(".tools/msu-contract/msu/"+file+".nut");
     local disk={},writes=0;
-    ::MSU.Mod <- {PersistentData={hasFile=@(id) id in disk,readFile=@(id) disk[id],
-        createFile=function(id,data){disk[id]<-data;writes++;}}};
-    foreach(id in ["Registry","Debug","Keybinds","Serialization","PersistentData"])
+    // Mirrors PersistentDataSystem.registerMod, which attaches the addon to each registered mod.
+    local persistence={hasFile=@(id) id in disk,readFile=@(id) disk[id],
+        createFile=function(id,data){disk[id]<-data;writes++;}};
+    ::MSU.Mod <- {PersistentData=persistence};
+    foreach(id in ["Registry","Debug","Keybinds","Serialization"])
         ::MSU.System[id]<-{registerMod=function(mod){}};
+    ::MSU.System.PersistentData <- {registerMod=function(mod){mod.PersistentData=persistence;}};
     ::MSU.System.Tooltips <- ::MSU.Class.TooltipsSystem();
     ::MSU.System.ModSettings <- ::MSU.Class.ModSettingsSystem();
     ::MSU.System.ModSettings.Screen={updateSettingInJS=function(mod,id,value){}};

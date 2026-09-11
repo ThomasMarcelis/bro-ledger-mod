@@ -12,6 +12,9 @@
 .bl-controls .bl-button { position:absolute;left:0;top:0;width:59%; }
 .bl-controls .bl-button + .bl-button { left:auto;right:0;width:39%; }
 .bl-effects { border-top:1px solid #746044;margin-top:.7rem;padding-top:.6rem; }
+/* Without a tracked plan the panel holds only these lines, so it sheds the plan-sized frame. */
+.bl-effects.bl-effects-only { border-top:0;margin-top:0;padding-top:0; }
+.character-screen .bl-panel:not(.bl-with-plan-body) { min-height:0; }
 .bl-effect { font-size:1.6rem;line-height:2.2rem; }
 .bl-effect-value { float:right;color:#efd58d; }
 .bl-targets { width:100%;margin:.6rem 0;border-collapse:collapse; }
@@ -82,7 +85,13 @@
 .bl-board-order { position:absolute;top:0;right:0;bottom:0;width:32rem; }
 .bl-order-header { overflow:hidden; }
 .bl-order-list-host { position:absolute;right:0;bottom:0;left:0; }
+/* The host has a definite height; without this the list sizes to content and overflows unscrolled. */
+.bl-order-list-host, .bl-order-scroll { min-height:0; }
+.bl-order-scroll { height:100%; }
 .bl-edit-route { box-sizing:border-box;padding:0 .5rem .4rem; }
+/* Reserves room so hovering a perk cannot reflow the tree below it. */
+.bl-perk-description { min-height:7rem;margin:.5rem 0;padding:.5rem;border:1px solid #514533;background:rgba(0,0,0,.2);font-size:1.5rem;line-height:2rem;color:#cfbd9f; }
+.bl-perk-description-title { color:#efd58d; }
 .bl-board .bl-heading { margin-top:0; }
 .bl-input-targets td { padding:.5rem .2rem; }
 .bl-input-targets th:first-child { width:40%; }
@@ -126,7 +135,8 @@
     .bl-board-targets .bl-tag { width:20%; }
 }
 .bl-share-text { display:block;width:100%;height:34rem;margin:1.5rem 0;resize:none; }
-.bl-error { position:absolute;bottom:0;left:2rem;right:2rem;background:#29241c;border:1px solid #ffd394;padding:.6rem;z-index:10; }
+/* Above the native scroll control, which sets z-index 10001 and would otherwise paint perk rows over the message. */
+.bl-error { position:absolute;bottom:0;left:2rem;right:2rem;background:#29241c;border:1px solid #ffd394;padding:.6rem;z-index:10010; }
 .character-screen .bl-panel.bl-failure { min-height:0; }
 .bl-panel .bl-error { position:static;word-wrap:break-word; }
 .character-screen .bl-route::after, .character-screen .bl-optional::after {
