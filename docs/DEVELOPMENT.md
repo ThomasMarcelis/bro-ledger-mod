@@ -43,7 +43,7 @@ Checks require a Squirrel success marker and empty stderr, run Node behavior tes
 
 Before packaging, also run `tests/run.nut` and `tests/settings.nut` with a Squirrel 3.0.x runner, requiring the same success marker and empty stderr. The settings suite executes queued preload includes and registered refresh/Evaluate callbacks. Squirrel 3.2 accepts adjacent same-line `if` statements that 3.0.x rejects without a separating newline or semicolon; a compile failure prevents the entire library chunk from registering.
 
-Packaging reads the version from `core.nut` and creates a deterministic `dist/mod_bro_ledger-<version>.zip` (currently 0.7.0, an unverified prerelease candidate) from original runtime files, README, MIT license, notices, and these two guides. Tools, dependencies, game assets, saves, fixtures and private evidence are excluded. `--audit` builds the separate owned runtime observer for disposable-campaign checks; it is not part of the player ZIP. Its queued command wrapper has a regression for forwarding, gameplay changes, RNG calls, and exception cleanup.
+Packaging reads the version from `core.nut` and creates a deterministic `dist/mod_bro_ledger-<version>.zip` (currently 0.7.1, an unverified prerelease candidate) from original runtime files, README, MIT license, notices, and these two guides. Tools, dependencies, game assets, saves, fixtures and private evidence are excluded. `--audit` builds the separate owned runtime observer for disposable-campaign checks; it is not part of the player ZIP. Its queued command wrapper has a regression for forwarding, gameplay changes, RNG calls, and exception cleanup.
 
 ## Acceptance boundary
 

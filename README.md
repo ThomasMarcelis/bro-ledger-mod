@@ -16,7 +16,7 @@ Requires Battle Brothers 1.5.2.3 with all DLC, [Modern Hooks](https://github.com
 
 To remove, delete the ZIP. Your library and tracked plans are left in place for a reinstall.
 
-0.7.0 is an unverified prerelease. It passes automated tests but has not been checked in a full in-game loop or on Windows/Proton. Back up your saves.
+0.7.1 is an unverified prerelease. It passes automated tests but has not been checked in a full in-game loop or on Windows/Proton. Back up your saves.
 
 ## Use
 
