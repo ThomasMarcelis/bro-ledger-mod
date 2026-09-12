@@ -7,6 +7,7 @@ afterEach(()=>{for(const[k,v]of Object.entries(original)){if(v===undefined)delet
 test('empty, one and many libraries expose real matches with ten per page and every remainder reachable',()=>{
     for(const count of [0,1,10,14,32,42]){
         const s=fixture(count),seen=[];
+        assert.equal(s.button('Source: All'),undefined,'personal-only comparison offers a starter filter');
         do {seen.push(...s.byClass('bl-build-row').map(n=>n.attr('data-build')));const next=s.button('Next');if(!next)break;click(next);}while(true);
         assert.equal(seen.length,count);assert.equal(new Set(seen).size,count);assert.deepEqual(s.calls,[]);
     }
@@ -280,6 +281,21 @@ test('starter source filtering, tracking and unsaved copying never modify a temp
     s.reply({error:'Library full'});assert.ok(s.button('Save build'),'failed copy discarded editor');
     click(s.button('Cancel'));assert.equal(s.calls.at(-1).request.action,'evaluate');
     assert.equal(JSON.stringify(s.data.starters),before);
+});
+
+test('hiding starters drops the source chooser and stale controls while personal copies remain trackable',()=>{
+    const s=fixture(1),template={...s.data.library[0],label:'Starter example'};
+    s.data.starters=[template];s.data.builds.push({...s.data.builds[0],source:'starter',label:template.label});
+    s.owner.compare(s.data);click(s.button('Source: All'));const oldChoice=s.button('Starters');
+    s.owner.evaluate();s.reply({starters:[],builds:s.data.builds.filter(b=>b.source==='library')});
+    assert.equal(s.button('Source: All'),undefined);click(oldChoice);
+    assert.equal(s.byClass('bl-build-row').length,1);
+    click(s.byClass('bl-build-row')[0]);click(s.button('Track build'));
+    assert.equal(s.calls.at(-1).request.source,'library');assert.equal(s.calls.at(-1).request.build,template.id);
+    s.reply();s.owner.evaluate();s.reply();
+    click(s.button('Source: All'));click(s.button('Starters'));
+    assert.equal(s.byClass('bl-build-row').length,1);
+    assert.equal(s.byClass('bl-build-row')[0].attr('data-source'),'starter');
 });
 
 test('legacy alternatives relay the saved option and stale dialogs cannot replace perks',()=>{

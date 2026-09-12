@@ -19,8 +19,10 @@ The player loop is: open a brother → Evaluate → create/import and compare co
 - Prefer one direct implementation per behavior. Do not add speculative abstractions, a second evaluator, a plugin framework, server, database, telemetry, or compatibility layer.
 - Keep state and mutation at the owning boundary. Fix root causes. Add a dependency or layer only for a demonstrated need.
 - State the invariant or scenario, write the smallest useful proof, implement, and verify. Keep tests focused on finite choices, normalization, legal routes, payload validation, plan continuity, settings, and stale callbacks.
+- Scale the work to the change. Small settings and visibility changes should use the existing implementation path and a focused validation pass. Touching Squirrel, JavaScript, and tests does not by itself make a change substantial.
+- Stop when the requested behavior works, appropriate checks pass, and no concrete issue remains. Reuse available tooling. Do not rebuild toolchains, repeat full suites, expand test matrices, or create extra packages and evidence artifacts merely for reassurance. Additional work needs a specific unresolved risk, failure, material change, or explicit applicable requirement; available time is not a reason to keep going.
 - Avoid tests for static copy, CSS, or DOM structure. Do not retain historical suites as release gates when they duplicate stronger behavior checks.
-- Substantial code changes require three independent final-diff reviews in parallel: correctness/architecture, simplicity/ownership, and changed-line value. Resolve material findings, subtract unnecessary work, and rerun proportionate checks. Documentation-only work does not require this ceremony.
+- Reserve three independent final-diff reviews in parallel for substantial behavioral or architectural changes: correctness/architecture, simplicity/ownership, and changed-line value. Resolve material findings, subtract unnecessary work, and rerun proportionate checks. Small settings/visibility changes and documentation-only work do not require this ceremony.
 - Keep maintained docs small. Store temporary status, plans, questions, evidence, tools, dependencies, saves, captures, and generated output only in ignored paths.
 
 ## UI

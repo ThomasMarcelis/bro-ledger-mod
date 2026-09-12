@@ -34,7 +34,7 @@ Open a brother and select **Bro Planner**.
 
 **Library.** Up to 32 personal builds, stored with your MSU mod settings and shared across campaigns. Builds saved inside a campaign by older versions are moved over once when that campaign loads.
 
-**Settings.** Mod Options toggles the planner, perk highlights and level-up advice; reopen the sheet after changing them. If a request fails, use **Retry**.
+**Settings.** Mod Options toggles the planner, perk highlights and level-up advice. Turn off **Show starter builds** to compare only personal builds; copies and tracked plans are kept. Turn off **Show current perk effects** to hide the Dodge, Nimble and Battle Forged readouts. Both default to on. Reopen the sheet after changing settings. If a request fails, use **Retry**.
 
 ## More
 

@@ -80,8 +80,8 @@ try
         check(registration.id=="mod_bro_ledger" && registration.version==B.Version && registration.name==B.Name,"registration changed save identity or disagrees with mod metadata");
         local panel=system.getUIData()[B.ID];
         check(panel.name==B.Name && !panel.hidden && panel.pages.len()==1 && panel.pages[0].name==B.Name,"settings page missing/hidden/misnamed");
-        check(panel.pages[0].settings.len()==3,"expected exactly three settings");
-        foreach(id in ["Enabled","PerkHighlights","LevelUpRecommendations"])
+        check(panel.pages[0].settings.len()==5,"expected exactly five settings");
+        foreach(id in ["Enabled","PerkHighlights","LevelUpRecommendations","ShowStarterBuilds","ShowPerkEffects"])
             check(settings.getSetting(id).getValue() && settings.getSetting(id).getPersistence(),"default or persistence missing: "+id);
         check(writes==0,"registration overwrote persistent preferences");
         system.updateSettingsFromJS({[B.ID]={PerkHighlights={type="bool",value=false}}});
@@ -91,19 +91,39 @@ try
         check(B.Mod.ModSettings.getSetting("PerkHighlights").getValue(),"registration default changed");
         system.importPersistentSettings();settings=B.Mod.ModSettings;
         check(!B.readSettings().PerkHighlights && B.readSettings().Enabled && writes==1,"MSU import lost value or rewrote storage");
+        check(B.readSettings().ShowStarterBuilds && B.readSettings().ShowPerkEffects,"old preferences lost new defaults");
+    });
+    test("msu_visibility_preferences_survive_restart",function(){
+        foreach(starters in [true,false]) foreach(effects in [true,false]) {
+            system.updateSettingsFromJS({[B.ID]={ShowStarterBuilds={type="bool",value=starters},ShowPerkEffects={type="bool",value=effects}}});
+            local before=writes;
+            B.Mod=::MSU.Class.Mod(B.ID,B.Version,B.Name);B.registerSettings();
+            system.importPersistentSettings();settings=B.Mod.ModSettings;
+            local options=B.readSettings();
+            check(options.ShowStarterBuilds==starters && options.ShowPerkEffects==effects && writes==before,"visibility preference lost on restart");
+            check(options.Enabled && !options.PerkHighlights && options.LevelUpRecommendations,"visibility changed other preferences");
+        }
+        settings.getSetting("ShowStarterBuilds").set(true);settings.getSetting("ShowPerkEffects").set(true);
     });
     test("msu_campaign_settings_restore_without_rewriting_startup_preferences",function(){
         local campaign={};
         B.Mod.Serialization={flagSerialize=function(id,value){campaign[id]<-B.copy(value);},
             flagDeserialize=function(id,fallback){return id in campaign ? B.copy(campaign[id]) : fallback;}};
         ::MSU.Mod.Serialization <- {isSavedVersionAtLeast=@(version,metadata) true};
-        system.flagSerialize(null);
-        settings.getSetting("Enabled").set(false);local before=writes;
+        local before=writes;
         system.flagDeserialize({getMetaData=@() {}});
-        check(B.readSettings().Enabled && writes==before,"campaign restore missed saved value or rewrote preferences");
+        check(B.readSettings().ShowStarterBuilds && B.readSettings().ShowPerkEffects && writes==before,"old campaign lost new defaults");
+        system.flagSerialize(null);
+        foreach(id in ["Enabled","ShowStarterBuilds","ShowPerkEffects"]) settings.getSetting(id).set(false);
+        before=writes;
+        system.flagDeserialize({getMetaData=@() {}});
+        foreach(id in ["Enabled","ShowStarterBuilds","ShowPerkEffects"])
+            check(B.readSettings()[id] && writes==before,"campaign restore missed saved value or rewrote preferences: "+id);
         system.importPersistentSettings();
-        check(!B.readSettings().Enabled && writes==before,"startup preference was overwritten by campaign restore");
-        settings.getSetting("Enabled").set(true);
+        foreach(id in ["Enabled","ShowStarterBuilds","ShowPerkEffects"]) {
+            check(!B.readSettings()[id] && writes==before,"startup preference was overwritten by campaign restore: "+id);
+        }
+        foreach(id in ["Enabled","ShowStarterBuilds","ShowPerkEffects"]) settings.getSetting(id).set(true);
     });
     local shown=0,hidden=0;
     local screen={m={},show=function(){shown++;},hide=function(){hidden++;},destroy=function(){},onBroLedger=null};
@@ -141,6 +161,25 @@ try
         state.issue=null;state.plan.enabled=true;
     });
     B.view=view;
+    test("visibility_applies_on_sheet_reopen_without_changing_tracked_intent",function(){
+        B.readActor=@(actor) fixture();B.perkDefs=@() dofile("tests/perk_unlocks.nut");
+        B.currentEffects=@(actor,perks) {dodge={owned=true,value=17}};
+        state.plan=B.makePlan(B.StarterBuilds[0]);local original=B.copy(state);
+        screen.hide();screen.show();local epoch=screen.m.BroLedgerContext.epoch;
+        local first=screen.onBroLedger({action="evaluate",actor=7,seq=10});
+        settings.getSetting("ShowStarterBuilds").set(false);settings.getSetting("ShowPerkEffects").set(false);
+        local pending=screen.onBroLedger({action="evaluate",actor=7,seq=11});
+        check(pending.builds.len()==10 && pending.effects!=null,"visibility changed before sheet reopen");
+        screen.hide();screen.show();
+        local hidden=screen.onBroLedger({action="evaluate",actor=7,seq=12});
+        check(hidden.starters.len()==0 && hidden.builds.len()==0 && hidden.effects==null,"reopen did not apply visibility");
+        check(same(hidden.plan,first.plan) && same(state,original),"reopen changed a tracked starter plan");
+        check("error" in screen.onBroLedger({action="track",actor=7,seq=13,epoch=epoch,revision=state.revision,
+            build=B.StarterBuilds[0].id,source="starter"}),"old comparison could track after settings reopen");
+        settings.getSetting("ShowStarterBuilds").set(true);settings.getSetting("ShowPerkEffects").set(true);
+        screen.hide();screen.show();local restored=screen.onBroLedger({action="evaluate",actor=7,seq=14});
+        check(same(restored.builds,first.builds) && same(restored.effects,first.effects) && same(state,original),"re-enable did not restore visibility alone");
+    });
     print("BRO_LEDGER_TESTS_PASSED "+count+"\n");
 }
 catch(e){print("FAIL "+e+"\n");}

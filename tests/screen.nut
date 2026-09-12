@@ -3,7 +3,8 @@ function commandFixture() {
     local a={m={},getID=@() 7,getName=@() "Test",isPerkUnlockable=@(id) true},flags=libraryFlags(),store=libraryStore();
     ::World<-{Flags=flags};B.ownedActor=@(id) id==7?a:null;B.readActor=@(actor) fixture();B.perkDefs=@() defs;
     B.libraryStore=@() store;B.currentEffects=@(actor,perks) {};
-    local screen={m={BroLedgerContext={epoch=91,seq=-1,actor=null,settings={Enabled=true,LevelUpRecommendations=false,PerkHighlights=true}}}};
+    local screen={m={BroLedgerContext={epoch=91,seq=-1,actor=null,
+        settings={Enabled=true,LevelUpRecommendations=false,PerkHighlights=true,ShowStarterBuilds=true,ShowPerkEffects=true}}}};
     return {actor=a,flags=flags,store=store,screen=screen,seq=0,request=function(action,extra={}) {
         local d={action=action,actor=7,seq=++this.seq,epoch=91,revision=B.actorState(a).revision};
         foreach(k,v in extra)d[k]<-v;return B.command(screen,d);
@@ -16,7 +17,7 @@ cases.empty_startup_uses_production_actor_library_and_view <- function() {
     B.libraryStore=@() store;
     ::Const.Perks<-{Perks=[[{ID="perk.colossus",Unlocks=0,Name="Colossus",Icon="ui/perks/perk_01.png"}]]};
     local screen={m={BroLedgerContext={epoch=91,seq=-1,actor=null,
-        settings={Enabled=true,LevelUpRecommendations=true,PerkHighlights=true}}}};
+        settings={Enabled=true,LevelUpRecommendations=true,PerkHighlights=true,ShowStarterBuilds=true,ShowPerkEffects=true}}}};
     foreach(seq,action in ["refresh","evaluate"]) {
         local r=B.command(screen,{action=action,actor=7,seq=seq});
         check(!("error" in r),"initial "+action+" failed: "+("error" in r?r.error:""));
@@ -31,6 +32,12 @@ cases.empty_startup_uses_production_actor_library_and_view <- function() {
     check("error" in r && screen.m.BroLedgerContext.seq==1,"failed read invented success or authority");
     store.has=has;r=B.command(screen,{action="evaluate",actor=7,seq=3});
     check(!("error" in r) && r.library.len()==0 && !store.has(),"retry did not recover empty library");
+    screen.m.BroLedgerContext.settings.ShowStarterBuilds=false;
+    screen.m.BroLedgerContext.settings.ShowPerkEffects=false;
+    r=B.command(screen,{action="evaluate",actor=7,seq=4});
+    check(r.builds.len()==0 && r.starters.len()==0 && r.effects==null && r.libraryIssue==null && r.newBuildID=="user_1",
+        "hidden starters prevented empty-library creation");
+    check(!store.has() && B.actorState(a).revision==0,"visibility options wrote an empty library or actor intent");
 };
 cases.create_edit_track_delete_disabled_continuity <- function() {
     local f=commandFixture();check(!("error" in f.request("refresh")),"refresh failed");
@@ -162,5 +169,47 @@ cases.full_library_and_starters_keep_all_matches <- function() {
     B.writeLibrary(f.store,builds,defs);local r=f.request("evaluate"),seen={};
     check(r.builds.len()==42 && r.library.len()==32 && r.starters.len()==10,"combined results truncated or capacity changed");
     foreach(b in r.builds) {local key=b.source+":"+b.id;check(!(key in seen),"source identity collided");seen[key]<-true;}
+    f.screen.m.BroLedgerContext.settings.ShowStarterBuilds=false;r=f.request("evaluate");
+    check(r.builds.len()==32 && r.library.len()==32 && r.starters.len()==0,"hidden starters truncated personal builds");
+    foreach(b in r.builds) check(b.source=="library","hidden starter leaked into comparison");
+};
+cases.visibility_options_preserve_personal_copies_plans_and_advice <- function() {
+    local f=commandFixture(),options=f.screen.m.BroLedgerContext.settings,snapshot=fixture();
+    options.LevelUpRecommendations=true;snapshot.pending=1;
+    B.readActor=@(actor) snapshot;
+    local templates=B.copy(B.StarterBuilds),personal=B.copy(templates[0]);personal.label="Personal copy";
+    B.writeLibrary(f.store,[personal],defs);f.request("evaluate");
+    check(!("error" in f.request("track",{build=templates[0].id,source="starter"})),"starter tracking failed");
+    local state=B.actorState(f.actor),values={};foreach(k in B.Stats) values[k]<-3;
+    state.offer={level=snapshot.level,pending=snapshot.pending,values=values};
+    local saved=B.copy(state.plan),wire=f.store.get(),revision=state.revision;
+    local evaluate=B.evaluate;
+    B.evaluate=function(snapshot,build,defs) {
+        if(!options.ShowStarterBuilds && B.StarterBuilds.find(build)!=null) throw "Evaluated a hidden starter";
+        return evaluate.call(this,snapshot,build,defs);
+    };
+    local effects={dodge={owned=true,value=17}};
+    B.currentEffects=function(actor,perks) {
+        if(!options.ShowPerkEffects) throw "Read hidden perk effects";
+        return effects;
+    };
+    local dormant=B.copy(saved);dormant.enabled=false;
+    foreach(plan in [saved,dormant,null]) {
+        state.plan=plan==null ? null : B.copy(plan);
+        options.ShowStarterBuilds=true;options.ShowPerkEffects=true;
+        local baseline=f.request("evaluate"),intent=B.copy(state.plan);
+        if(plan!=null && plan.enabled) check(baseline.offer!=null && baseline.plan.route!=null,"missing baseline guidance");
+        foreach(starters in [true,false]) foreach(perks in [true,false]) {
+            options.ShowStarterBuilds=starters;options.ShowPerkEffects=perks;
+            local r=f.request("evaluate");check(!("error" in r),"visibility evaluation failed");
+            check(r.builds.len()==(starters?11:1) && r.starters.len()==(starters?10:0),"starter visibility ignored");
+            local copies=0;foreach(b in r.builds) if(b.source=="library" && b.id==personal.id) copies++;
+            check(copies==1 && r.library.len()==1,"starter visibility hid a personal copy with the same ID");
+            check(same(r.effects,perks?effects:null),"perk visibility ignored");
+            check(same(r.plan,baseline.plan) && same(r.offer,baseline.offer),"visibility changed plan guidance or advice");
+            check(same(state.plan,intent) && state.revision==revision && f.store.get()==wire && same(B.StarterBuilds,templates),
+                "visibility changed saved intent, library or templates");
+        }
+    }
 };
 return cases;

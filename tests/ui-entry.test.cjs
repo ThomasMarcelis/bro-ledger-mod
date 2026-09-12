@@ -28,11 +28,32 @@ test('selected brother can Evaluate before initial data and reach empty-library 
     assert.equal(f.calls.at(-1).request.action, 'evaluate');
     f.reply();
     assert.deepEqual(f.owner.data.library, []);
+    assert.equal(f.button('Source: All'),undefined);
     click(f.button('Create build'));
     assert.ok(f.byClass('bl-name-field').length, 'creator did not open');
     f.owner.evaluate(); f.reply();
     click(f.button('Import'));
     assert.ok(f.button('Import builds'), 'import did not open');
+});
+
+test('hidden effect payloads clear readouts across plan states without hiding the planner or reviving stale effects', () => {
+    const active={enabled:true,label:'Saved route',projection:{horizon:11},jointState:'possible',statRows:[],route:{feasible:true}};
+    const effects={dodge:{owned:true,value:17},nimble:{owned:true,value:60},battleForged:{owned:true,value:32.7}};
+    for(const plan of [active,{enabled:false,label:'Saved route'},null]) {
+        const f=entryFixture(),panel=f.owner.panel;
+        f.reply({plan,effects});
+        assert.equal(panel.find('.bl-effect').length,3);
+        const old=f.calls.at(-1);
+        f.owner.request('refresh');f.reply({plan,effects:null});
+        old.callback({...f.data,seq:old.request.seq,plan,effects});
+        assert.equal(panel.find('.bl-effect').length,0);
+        assert.equal(f.owner.entry.hidden,false);
+        assert.equal(panel.hidden,!(plan && plan.enabled));
+        if(plan && plan.enabled) assert.ok(descendants(panel).some(n=>n.value===plan.label));
+        assert.equal(f.owner.data.plan,plan);
+        f.owner.request('refresh');f.reply({plan,effects});
+        assert.equal(panel.find('.bl-effect').length,3);
+    }
 });
 
 for (const failure of ['backend', 'empty response', 'transport throw']) {

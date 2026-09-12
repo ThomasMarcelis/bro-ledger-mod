@@ -207,7 +207,7 @@ var BroLedgerUI = (function () {
         button(controls, 'Disable', function () { self.request('enabled', {enabled:false}); });
         this.targets(this.panel, plan, data.stars, true);
         this.perkOrder(this.panel, plan, data.defs, true);
-        this.effects($('<div class="bl-effects"/>').appendTo(this.panel), data.effects);
+        if (data.effects) this.effects($('<div class="bl-effects"/>').appendTo(this.panel), data.effects);
         this.renderOffer();
     };
     Controller.prototype.evaluate = function () {
@@ -230,9 +230,10 @@ var BroLedgerUI = (function () {
     Controller.prototype.compare = function (data) {
         if (!data.settings.Enabled) return;
         var self = this, popup = this.dialog(data.title), selected = null, weapon = 'All', style = 'All', source = 'All', page = 0;
+        var hasStarters = data.starters && data.starters.length > 0;
         var body = $('<div class="bl-compare-body"/>').appendTo(popup.findPopupDialogContentContainer());
         var context = $('<div class="bl-compare-context"/>').appendTo(body);
-        text(context, data.name + ' · Builds and starter templates', true);
+        text(context, data.name + (hasStarters ? ' · Builds and starter templates' : ' · My builds'), true);
         tooltip(text(context, 'Potential: weighted target fit using one shared allocation.'), 'potential');
         var tools = $('<div class="bl-toolbar"/>').appendTo(context);
         button(tools, 'Create build', function () { if (self.current(data,popup)) self.editor(data,null); });
@@ -270,7 +271,7 @@ var BroLedgerUI = (function () {
             }).attr('aria-expanded',false);
         }
         filter('Weapon',data.weaponTags,function (v) {weapon=v;}); filter('Playstyle',data.playstyleTags,function (v) {style=v;});
-        filter('Source',['My builds','Starters'],function (v) {source=v;});
+        if(hasStarters) filter('Source',['My builds','Starters'],function (v) {source=v;});
         var columns = $('<div class="bl-compare-columns"/>').appendTo(body);
         var catalog = $('<div class="bl-build-list"/>').appendTo(columns);
         var list = $('<div class="bl-catalog-body"/>').appendTo(catalog);
@@ -313,7 +314,7 @@ var BroLedgerUI = (function () {
             text(details,data.libraryIssue || (data.builds.length===0 ? 'Your library is empty. Create a build or import share text.' :
                 filtered.length ? 'Select a build to inspect its targets and perk order.' : 'No builds match these filters.'));
             if(data.issue) text(details,data.issue).addClass('bl-warning');
-            if(data.starters && data.starters.length) text(details,'Starter templates are starting guides and may be suboptimal. Select one to inspect it, track it, or copy it into your library.').addClass('bl-starter-notice');
+            if(hasStarters) text(details,'Starter templates are starting guides and may be suboptimal. Select one to inspect it, track it, or copy it into your library.').addClass('bl-starter-notice');
             if(data.plan) text(details,(data.plan.enabled?'Tracking: ':'Disabled plan: ')+data.plan.label);
             // Legacy replacements stay deliberate and reachable from Change build, outside the compact panel.
             if(data.plan && data.plan.options && data.plan.options.length) {

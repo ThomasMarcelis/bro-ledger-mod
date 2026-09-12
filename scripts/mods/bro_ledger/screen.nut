@@ -6,11 +6,14 @@
     local timing = " Close and reopen the character sheet to apply.";
     page.addBooleanSetting("Enabled", true, "Enable planner",
         "Show Bro Planner and saved-plan guidance. Turning this off retains every brother's plan." + timing);
+    page.addBooleanSetting("ShowStarterBuilds", true, "Show starter builds",
+        "Include the ten starter templates in build comparisons. Turning this off keeps personal copies and tracked plans." + timing);
     page.addBooleanSetting("PerkHighlights", true, "Perk highlights",
         "Show green route and blue flexible-perk marks. Perk choices stay manual." + timing);
     page.addBooleanSetting("LevelUpRecommendations", true, "Level-up recommendations",
         "Suggest weighted attributes from the actual offered rolls. Fill other choices and spend points yourself." + timing);
-
+    page.addBooleanSetting("ShowPerkEffects", true, "Show current perk effects",
+        "Show current Dodge, Nimble and Battle Forged values on the character sheet, including brothers without a tracked plan." + timing);
 };
 
 ::BroLedger.registerTooltips <- function()
@@ -31,7 +34,7 @@
 ::BroLedger.readSettings <- function()
 {
     local settings = {};
-    foreach (id in ["Enabled", "PerkHighlights", "LevelUpRecommendations"])
+    foreach (id in ["Enabled", "PerkHighlights", "LevelUpRecommendations", "ShowStarterBuilds", "ShowPerkEffects"])
         settings[id] <- this.Mod.ModSettings.getSetting(id).getValue();
     return settings;
 };
@@ -49,12 +52,13 @@
 {
     local state=this.actorState(actor),snapshot=this.readActor(actor),defs=this.perkDefs();
     if(library==null) library=this.readLibrary(this.libraryStore(),defs,::World.Flags);
+    local starters=catalog && settings.ShowStarterBuilds ? this.StarterBuilds : [];
     local out={actor=actor.getID(),name=actor.getName(),revision=state.revision,issue=state.issue,plan=null,
         stars=this.copy(snapshot.stars),notes=snapshot.notes,warnings=snapshot.warnings,defs=defs,builds=[],offer=null,
         libraryIssue=library.issue,libraryNotice=("notice" in library ? library.notice : null),library=library.builds,
-        starters=catalog ? this.StarterBuilds : [],effects=this.currentEffects(actor,snapshot.perks),
+        starters=starters,effects=settings.ShowPerkEffects ? this.currentEffects(actor,snapshot.perks) : null,
         tagIcons=this.tagIcons(defs),weaponTags=this.WeaponTags,playstyleTags=this.PlaystyleTags};
-    if(catalog) out.builds=this.compare(snapshot,defs,library.builds,this.StarterBuilds).builds;
+    if(catalog) out.builds=this.compare(snapshot,defs,library.builds,starters).builds;
     if(state.issue!=null || state.plan==null) return out;
     local saved=state.plan;
     out.plan={build=saved.build,label=saved.label,enabled=saved.enabled,legacy=saved.schema<4};
