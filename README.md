@@ -16,7 +16,7 @@ Requires Battle Brothers 1.5.2.3 with all DLC, [Modern Hooks](https://github.com
 
 To remove, delete the ZIP. Your library and tracked plans are left in place for a reinstall.
 
-0.8.0 is an unverified prerelease. It passes automated tests but has not been checked in a full in-game loop or on Windows/Proton. Back up your saves.
+Tested in a live campaign on Battle Brothers 1.5.2.3 with Modern Hooks 0.6.0 and MSU 1.9.0 alongside a full mod stack. As with any mod, back up your saves before installing.
 
 ## Use
 
