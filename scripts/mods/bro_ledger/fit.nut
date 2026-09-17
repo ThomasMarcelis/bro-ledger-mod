@@ -221,10 +221,11 @@
     if(preferred!=null) foreach(k,v in preferred) if(k in plan.targets && weights[k]>0) goals[k]<-v;
     local joint=preferred==null ? {known=false,feasible=false,shortfalls=[]} : this.feasibility(snapshot,goals,"high");
     foreach(k in this.Stats) {
-        local now=this.endpoint(snapshot,k),ideal=preferred!=null && k in preferred ? preferred[k] : null;
+        local now=this.currentStat(snapshot,k),ideal=preferred!=null && k in preferred ? preferred[k] : null;
         local maximum=snapshot.growthKnown ? this.endpoint(snapshot,k,snapshot.normalRows,snapshot.veteranRows,snapshot.giftRows,"high") : null;
         rows.push({key=k,now=now,minimum=k in plan.targets ? plan.targets[k] : null,ideal=ideal,weight=weights[k],
             expected=projection.known ? projection.stats[k] : null,maximum=maximum,
+            statPerks=("statPerks" in snapshot) && typeof snapshot.statPerks=="table" && (k in snapshot.statPerks) ? this.copy(snapshot.statPerks[k]) : [],
             idealState=ideal==null ? "none" : weights[k]==0 ? "ignored" : now==null ? "unknown" : now>=ideal ? "met" : maximum!=null && maximum<ideal ? "impossible" : "grow"});
     }
     return {score=fit.score,projection=projection,statRows=rows,

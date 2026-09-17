@@ -73,4 +73,7 @@ function fixture(count=14, plan=null, issue=null) {
         reply(extra={}){const c=calls.at(-1);c.callback({...data,seq:c.request.seq,...extra});}};
 }
 function click(node){if(!node||!node.handlers.click)throw Error('Missing clickable control');node.handlers.click();}
-module.exports={fixture,click};
+// Install the same node/globals boundary without opening a comparison popup, for callers that
+// render a single production widget (for example the compact side panel) in isolation.
+function dom(){const s=fixture(0);return {$:global.$,root:()=>global.$('<div/>'),nodes:s.nodes};}
+module.exports={fixture,click,dom};

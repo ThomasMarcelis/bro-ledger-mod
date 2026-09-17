@@ -19,9 +19,9 @@
 ::BroLedger.registerTooltips <- function()
 {
     local tips = {
-        stats = ["Underlying stats", "Permanent stats before equipment, Colossus, Fortified Mind and Dodge. Lasting traits and injuries count."],
+        stats = ["Underlying stats", "Permanent stats including Colossus and Fortified Mind once acquired, before equipment and Dodge. Lasting traits and injuries count."],
         potential = ["Weighted Potential", "Best weighted average of attribute satisfaction in one legal allocation at average rolls. Each attribute scores 50 at Minimum and 100 at Ideal; equal Minimum/Ideal use one 0–100 ramp. Weight 2 counts twice as much as 1; 0 ignores. Surplus above Ideal does not count. An overall 50 does not mean every Minimum is met. This measures target fit, not combat strength."],
-        expected = ["Shared forecast", "All eight projected stats share three selections per remaining level. Average rolls are assumptions, not revealed future rolls. Red requires a maximum-roll bound within this horizon."],
+        expected = ["Shared forecast", "All eight projected stats share three selections per remaining level. Average rolls are assumptions, not revealed future rolls. A perk mark means the build's Colossus or Fortified Mind is already counted. Red requires a maximum-roll bound within this horizon."],
         targets = ["Ideal progress", "Green: already met. Yellow: needs development. Red: impossible even with every remaining row invested here at maximum rolls, within the displayed level horizon. Joint shortfalls are shown separately."],
         dodge = ["Dodge defence", "Current bonus to both melee and ranged defence: 15% of current Initiative. Equipment and accumulated fatigue affect it."],
         nimble = ["Nimble HP reduction", "Current reduction of damage to hitpoints. At most 60%, with raw head and body fatigue penalty of 15 or less. Brawny does not reduce that raw weight."],
@@ -54,6 +54,7 @@
     if(library==null) library=this.readLibrary(this.libraryStore(),defs,::World.Flags);
     local starters=catalog && settings.ShowStarterBuilds ? this.StarterBuilds : [];
     local out={actor=actor.getID(),name=actor.getName(),revision=state.revision,issue=state.issue,plan=null,
+        collapsed=this.readCollapsed(actor),
         stars=this.copy(snapshot.stars),notes=snapshot.notes,warnings=snapshot.warnings,defs=defs,builds=[],offer=null,
         libraryIssue=library.issue,libraryNotice=("notice" in library ? library.notice : null),library=library.builds,
         starters=starters,effects=settings.ShowPerkEffects ? this.currentEffects(actor,snapshot.perks) : null,
@@ -98,7 +99,7 @@
     }
     local actor=this.ownedActor(data.actor);
     if(actor==null) return {error="Select a living company brother."};
-    local state=this.actorState(actor),previous=state.plan,revision=state.revision;
+    local state=this.actorState(actor),previous=state.plan,revision=state.revision,collapsed=this.readCollapsed(actor);
     try {
         local defs=this.perkDefs(),store=this.libraryStore(),library=this.readLibrary(store,defs,::World.Flags),next=library.builds,changed=false,share=null,notice=library.notice;
         if(write || data.action=="export") {
@@ -160,13 +161,18 @@
                 !(option.replace in defs) || !(option.with in defs)) throw "Perk alternatives changed; refresh.";
             state.plan=this.replacePlan(plan,data.index,snapshot.perks);
         }
+        else if(data.action=="collapse") {
+            if(!("collapsed" in data) || typeof data.collapsed!="bool") throw "Unknown panel state.";
+            this.writeCollapsed(actor,data.collapsed);
+        }
         else if(data.action!="refresh" && data.action!="evaluate") throw "Unknown command.";
-        if(write) {
+        // Collapsing only changes how the panel is drawn, so it never revises tracked intent.
+        if(write && data.action!="collapse") {
             if(state.plan!=null && !this.validPlan(state.plan)) throw "Invalid plan; previous intent retained.";
             state.revision++;
         }
         // Prepare the complete response before committing library bytes, so read errors cannot partially import.
-        local result=this.view(actor,data.action!="refresh" && data.action!="enabled" && data.action!="replace",context.settings,
+        local result=this.view(actor,data.action!="refresh" && data.action!="enabled" && data.action!="replace" && data.action!="collapse",context.settings,
             {builds=next,issue=library.issue,notice=notice});
         result.epoch<-context.epoch;result.seq<-data.seq;result.title<-this.Name;result.settings<-context.settings;
         if(share!=null) result.share<-share;
@@ -177,5 +183,5 @@
         context.libraryToken<-token;
         return result;
     }
-    catch(error) {state.plan=previous;state.revision=revision;return {error=error.tostring()};}
+    catch(error) {state.plan=previous;state.revision=revision;this.writeCollapsed(actor,collapsed);return {error=error.tostring()};}
 };

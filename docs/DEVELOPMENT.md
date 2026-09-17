@@ -6,7 +6,7 @@ Squirrel owns actor reads, the finite evaluator, definition validation, library 
 
 | File | Responsibility |
 | --- | --- |
-| `core.nut` | Constants, native stat endpoints, Gifted availability, finite allocation feasibility. |
+| `core.nut` | Constants, native stat endpoints, stat-scaling perks, Gifted availability, finite allocation feasibility. |
 | `library.nut` | Player-wide library via MSU PersistentData, one-way adoption of legacy campaign flags, bounded definitions/weights, inert BL1/BL2 sharing, duplicate policy. |
 | `starters.nut` | Ten original read-only templates, independent of campaign flags. |
 | `fit.nut` | Weighted shared-allocation Potential, progression bounds, comparison order, visible-roll advice. |
@@ -24,7 +24,7 @@ The library is one bounded BL2 string in the MSU PersistentData file `library` u
 
 Ten built-in templates are compared separately and do not occupy personal slots or touch the store. Result and selection identities include `source` (`library` or `starter`) and build ID. Track/export resolve that pair; editing a starter creates a personal draft. Personal IDs may equal template IDs without changing source ownership. Personal library damage does not authorize repair through a starter action.
 
-Tracked intent remains `BroLedger.Schema` plus MSU `MSU.mod_bro_ledger.Plan` flags. Schema 5 (definitions revision 6) snapshots name, targets, weights, route, flex and tags. Schemas 1–4 remain readable without migration. Reads use a non-consuming flag view. Unknown schemas remain unchanged and disable plan writes. Template/library changes never modify tracked snapshots. Disable retains intent; Change build replaces it.
+Tracked intent remains `BroLedger.Schema` plus MSU `MSU.mod_bro_ledger.Plan` flags. Schema 5 (definitions revision 6) snapshots name, targets, weights, route, flex and tags. Schemas 1–4 remain readable without migration. Reads use a non-consuming flag view. Unknown schemas remain unchanged and disable plan writes. Template/library changes never modify tracked snapshots. Disable retains intent; Change build replaces it. Panel collapse is presentation only: a separate `BroLedger.Collapsed` actor flag, set/removed outside the plan schema, so it never revises tracked intent.
 
 Every mutation checks the selected owned actor, screen epoch, observed actor revision, request sequence, and last observed library bytes. Native callbacks and closures reject stale actor/dialog state. Never mutate live actors to forecast, reveal future rolls, spend/equip/rename, or replace native perk confirmation or drag/drop.
 
@@ -43,7 +43,7 @@ Checks require a Squirrel success marker and empty stderr, run Node behavior tes
 
 Before packaging, also run `tests/run.nut` and `tests/settings.nut` with a Squirrel 3.0.x runner, requiring the same success marker and empty stderr. The settings suite executes queued preload includes and registered refresh/Evaluate callbacks. Squirrel 3.2 accepts adjacent same-line `if` statements that 3.0.x rejects without a separating newline or semicolon; a compile failure prevents the entire library chunk from registering.
 
-Packaging reads the version from `core.nut` and creates a deterministic `dist/mod_bro_ledger-<version>.zip` (currently 0.7.1, an unverified prerelease candidate) from original runtime files, README, MIT license, notices, and these two guides. Tools, dependencies, game assets, saves, fixtures and private evidence are excluded. `--audit` builds the separate owned runtime observer for disposable-campaign checks; it is not part of the player ZIP. Its queued command wrapper has a regression for forwarding, gameplay changes, RNG calls, and exception cleanup.
+Packaging reads the version from `core.nut` and creates a deterministic `dist/mod_bro_ledger-<version>.zip` (currently 0.8.0, an unverified prerelease candidate) from original runtime files, README, MIT license, notices, and these two guides. Tools, dependencies, game assets, saves, fixtures and private evidence are excluded. `--audit` builds the separate owned runtime observer for disposable-campaign checks; it is not part of the player ZIP. Its queued command wrapper has a regression for forwarding, gameplay changes, RNG calls, and exception cleanup.
 
 ## Acceptance boundary
 

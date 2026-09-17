@@ -142,12 +142,23 @@ var BroLedgerUI = (function () {
             $('<th/>').text(label).appendTo(header);
         });
         var body = $('<tbody/>').appendTo(table), short = {hp:'HP',resolve:'Res',fatigue:'Fat',initiative:'Init',matk:'MAtk',ratk:'RAtk',mdef:'MDef',rdef:'RDef'};
+        var defs = (this.data && this.data.defs) || {};
         build.statRows.forEach(function (row) {
             var tr = $('<tr/>').appendTo(body);
             $('<td/>').text(compact ? short[row.key] : names[row.key]).attr('title', names[row.key]).appendTo(tr);
-            tooltip($('<td/>').text(valueLabel(row.now)).appendTo(tr), 'stats');
+            tooltip($('<td class="bl-current"/>').text(valueLabel(row.now)).appendTo(tr), 'stats');
             if (!compact) {
-                tooltip($('<td/>').text(valueLabel(row.expected)).appendTo(tr), 'expected');
+                // The Potential value can only be reached because the build plans these perks, so
+                // name them next to it rather than leaving an unexplained higher number.
+                var cell = $('<td class="bl-potential"/>').text(valueLabel(row.expected)).appendTo(tr);
+                (row.statPerks || []).forEach(function (entry) {
+                    var def = defs[entry.id], label = def && def.name ? def.name : entry.id;
+                    var mark = $('<span class="bl-perk-mark"/>').appendTo(cell);
+                    if (def && def.icon) $('<img/>').attr('src', Path.GFX + def.icon).attr('alt', label).appendTo(mark);
+                    else mark.text(label);
+                    mark.attr('title', label + (entry.acquired ? ' (acquired)' : ' (planned)'));
+                });
+                tooltip(cell, 'expected');
                 $('<td/>').text(row.minimum == null ? '—' : valueLabel(row.minimum)).appendTo(tr);
             }
             tooltip($('<td/>').text(row.idealState === 'ignored' ? 'Ignored' : row.ideal == null ? '—' : valueLabel(row.ideal)).addClass('bl-target-' + row.idealState).appendTo(tr), 'targets');
@@ -187,19 +198,45 @@ var BroLedgerUI = (function () {
         });
         return shown;
     };
+    // Collapsing is a view preference, so it applies at once and persists in the background.
+    Controller.prototype.setCollapsed = function (collapsed) {
+        if (!this.data) return;
+        this.data.collapsed = collapsed;
+        this.render();
+        this.request('collapse', {collapsed: collapsed});
+    };
+    Controller.prototype.collapseToggle = function (parent, collapsed) {
+        var self = this;
+        var node = $('<div class="bl-collapse" role="button" tabindex="0"/>')
+            .attr('title', collapsed ? 'Expand Bro Planner' : 'Collapse Bro Planner, freeing the sheet for other mods')
+            .attr('aria-label', collapsed ? 'Expand Bro Planner' : 'Collapse Bro Planner')
+            .attr('aria-expanded', !collapsed).text(collapsed ? '+' : '–').appendTo(parent);
+        function toggle() { self.setCollapsed(!collapsed); }
+        node.on('click', toggle).on('keydown', function (e) {
+            if (e.which === 13 || e.which === 32) { e.preventDefault(); toggle(); }
+        });
+        return node;
+    };
     Controller.prototype.render = function () {
         if (!this.panel) return;
-        disposeLists(this.panel); this.panel.empty().hide().removeClass('bl-failure bl-with-plan-body'); this.screen.mContainer.removeClass('bl-with-plan');
+        disposeLists(this.panel); this.panel.empty().hide().removeClass('bl-failure bl-with-plan-body bl-collapsed'); this.screen.mContainer.removeClass('bl-with-plan');
         var self = this, data = this.data, plan = data && data.plan;
         var enabled = data ? data.settings.Enabled : this.enabled;
         this.entry.toggle(this.visible && this.actor !== null && enabled !== false); this.markPerks();
         if (!this.visible || !data || !data.settings.Enabled) { this.renderOffer(); return; }
+        var tracked = plan && plan.enabled && !data.issue;
         // Learned Dodge/Nimble/Battle Forged are facts about the brother, so they do not wait for a tracked build.
-        if (!plan || !plan.enabled || data.issue) {
-            var loose = $('<div class="bl-effects bl-effects-only"/>');
-            if (this.effects(loose, data.effects)) { loose.appendTo(this.panel); this.panel.show(); }
+        var loose = $('<div class="bl-effects bl-effects-only"/>');
+        var hasEffects = !tracked && data.effects && this.effects(loose, data.effects);
+        // An empty panel has nothing to collapse, so it shows no toggle at all.
+        if (!tracked && !hasEffects) { this.renderOffer(); return; }
+        if (data.collapsed) {
+            this.panel.show().addClass('bl-collapsed');
+            this.collapseToggle(this.panel, true);
             this.renderOffer(); return;
         }
+        this.collapseToggle(this.panel, false);
+        if (!tracked) { loose.appendTo(this.panel); this.panel.show(); this.renderOffer(); return; }
         this.panel.show().addClass('bl-with-plan-body'); this.screen.mContainer.addClass('bl-with-plan');
         text(this.panel, plan.label, true).addClass('bl-plan-title');
         var controls = $('<div class="bl-controls"/>').appendTo(this.panel);

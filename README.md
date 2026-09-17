@@ -16,7 +16,7 @@ Requires Battle Brothers 1.5.2.3 with all DLC, [Modern Hooks](https://github.com
 
 To remove, delete the ZIP. Your library and tracked plans are left in place for a reinstall.
 
-0.7.1 is an unverified prerelease. It passes automated tests but has not been checked in a full in-game loop or on Windows/Proton. Back up your saves.
+0.8.0 is an unverified prerelease. It passes automated tests but has not been checked in a full in-game loop or on Windows/Proton. Back up your saves.
 
 ## Use
 
@@ -26,9 +26,9 @@ Open a brother and select **Bro Planner**.
 
 **Perk order.** Mandatory perks must fit a brother's points (10, or 11 with Student) and respect unlock tiers. Mark a perk **Flexible** to keep it as an alternate that yields to whatever you learn manually. Flexible perks sit on top of the budget, up to 20 perks in total. Hover a perk for its description.
 
-**Compare.** **Potential** scores how well a brother can satisfy a build's weighted targets with one legal allocation at average rolls. It measures fit to the creator's targets, not combat power. Filter by weapon, playstyle and source. Ten results per page.
+**Compare.** **Potential** scores how well a brother can satisfy a build's weighted targets with one legal allocation at average rolls. It measures fit to the creator's targets, not combat power. Colossus and Fortified Mind count: once acquired they raise the brother's current HP/Resolve, and while only planned they raise the reachable maximum, marked with that perk's icon beside the Potential value. Filter by weapon, playstyle and source. Ten results per page.
 
-**Track.** **Track build** saves a snapshot to the brother. The character sheet then shows progress per goal (green met, yellow in progress, red unreachable), the perk route, current Dodge/Nimble/Battle Forged contributions, and rates level-up rolls by the build's weights. **Disable** pauses a plan, **Re-enable** restores it, **Change build** swaps it. Editing a library build doesn't change tracked brothers; track it again to update them.
+**Track.** **Track build** saves a snapshot to the brother. The character sheet then shows progress per goal (green met, yellow in progress, red unreachable), the perk route, current Dodge/Nimble/Battle Forged contributions, and rates level-up rolls by the build's weights. **Disable** pauses a plan, **Re-enable** restores it, **Change build** swaps it. Collapse the sheet panel to free space for other mods' controls; that choice is per brother and survives a restart. Editing a library build doesn't change tracked brothers; track it again to update them.
 
 **Share.** **Export** copies one build, or **Export my builds** for all, as text; Ctrl+C to copy. **Import** accepts BL1/BL2 text, pasted or via **Paste clipboard**. Duplicates are rejected unless you choose **Skip duplicates** or **Import copies**. Nothing goes over the network.
 

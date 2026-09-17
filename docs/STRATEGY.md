@@ -20,7 +20,7 @@ The eight-stat forecast reconstructs the winning allocation and fills unused slo
 
 ## Stat basis and finite growth
 
-Targets use permanent natural stats before gear, Colossus, Fortified Mind, and Dodge. Lasting traits, origin effects, injuries, and already allocated Gifted gains count. Raw growth is added before native final rounding and sign-dependent multipliers. Initiative retains its native permanent Stamina deduction. Temporary morale, fatigue, damage, and equipment condition do not affect fit.
+Targets use permanent natural stats including Colossus and Fortified Mind, the only two native perks that scale a tracked attribute, before gear and Dodge. An acquired stat perk raises the brother's current value; one the tracked build still plans raises the reachable maximum and forecast only, and is credited by a perk mark beside that Potential value. Lasting traits, origin effects, injuries, and already allocated Gifted gains count. Raw growth is added before native final rounding and sign-dependent multipliers. Initiative retains its native permanent Stamina deduction. Temporary morale, fatigue, damage, and equipment condition do not affect fit.
 
 Growth uses safe native ranges and visible talents, never future offers. Ordinary growth stops at level 11; Manhunter Indebted stop at level 7. Already earned veteran rows use +1; future veteran levels are not invented. An obtainable, unlearned planned Gifted adds one row of three maximum ordinary gains without talent bonuses. Student's single refund obeys native point availability. Uncertain pending row types or required growth produce an unrated result.
 

@@ -54,7 +54,10 @@ try
     test("queued_startup_refresh_and_evaluate_empty_library",function(){
         dofile("tests/fixtures.nut");
         local actor=actorFixture(),flags={has=@(key) false,set=function(...){throw "Startup wrote library";}};
-        actor.getID<-@() 7;actor.getName<-@() "Test";actor.isGuest<-@() false;actor.isAlive<-@() true;
+        local actorFlagValues={};
+        local actorFlags={has=@(k) k in actorFlagValues,get=@(k) k in actorFlagValues?actorFlagValues[k]:null,
+            set=function(k,v){actorFlagValues[k]<-v;},remove=function(k){if(k in actorFlagValues) delete actorFlagValues[k];}};
+        actor.getID<-@() 7;actor.getName<-@() "Test";actor.isGuest<-@() false;actor.isAlive<-@() true;actor.getFlags<-@() actorFlags;
         ::World.Flags<-flags;::World.getPlayerRoster<-@() {getAll=@() [actor]};
         ::Const.Perks<-{Perks=[]};
         local screen={m={},show=function(){},hide=function(){},destroy=function(){}};
@@ -130,7 +133,10 @@ try
     local originalShow=screen.show,originalHide=screen.hide,originalDestroy=screen.destroy;
     hooks["scripts/ui/screens/character/character_screen"](screen);
     screen.show=screen.show(originalShow);screen.hide=screen.hide(originalHide);screen.destroy=screen.destroy(originalDestroy);
-    local actor={m={},getID=@() 7,getName=@() "Test brother",isPerkUnlockable=@(id) true};
+    local actorFlagValues={};
+    local screenActorFlags={has=@(k) k in actorFlagValues,get=@(k) k in actorFlagValues?actorFlagValues[k]:null,
+        set=function(k,v){actorFlagValues[k]<-v;},remove=function(k){if(k in actorFlagValues) delete actorFlagValues[k];}};
+    local actor={m={},getID=@() 7,getName=@() "Test brother",isPerkUnlockable=@(id) true,getFlags=@() screenActorFlags};
     local state=B.actorState(actor),legacy={schema=4,revision=5,enabled=true,build="user_1",label="Saved",targets={},preferredTargets={},route=[],flex=[],weaponTags=[],playstyleTags=[]};
     ::World <- {Flags={has=@(k) false}};B.perkDefs=@() {};
     legacy.revision=1;state.plan=legacy;

@@ -1,7 +1,27 @@
 ::BroLedger <- {
-    ID = "mod_bro_ledger", Name = "Bro Planner", Version = "0.7.1", Revision = 6,
+    ID = "mod_bro_ledger", Name = "Bro Planner", Version = "0.8.0", Revision = 6,
     Stats = ["hp", "resolve", "fatigue", "initiative", "matk", "ratk", "mdef", "rdef"],
     StatNames = {hp="HP",resolve="Resolve",fatigue="Fatigue",initiative="Initiative",matk="Melee Skill",ratk="Ranged Skill",mdef="Melee Defence",rdef="Ranged Defence"}
+};
+
+// The only two native perks that scale a tracked base attribute, both retroactive on the maximum
+// (data_001.dat build 23856902: Colossus onUpdate -> HitpointsMax via Math.floor, Fortified Mind
+// onUpdate -> BraveryMult). Every other perk's Mult/Max write targets damage, morale or armour.
+// Brawny has no property hook at all; it changes equipment fatigue weight, which is not a stat here.
+::BroLedger.StatPerks <- {
+    ["perk.colossus"] = {hp = 1.25},
+    ["perk.fortified_mind"] = {resolve = 1.25}
+};
+
+::BroLedger.perkScales <- function(ids)
+{
+    local scale = {};
+    foreach (key in this.Stats) scale[key] <- 1.0;
+    foreach (id in ids)
+        if (id in this.StatPerks)
+            foreach (key, value in this.StatPerks[id])
+                if (key in scale) scale[key] *= value;
+    return scale;
 };
 
 ::BroLedger.copy <- function(value)
@@ -32,12 +52,33 @@
     return ::Math.floor(raw*(raw>=0 ? scale : 1.0/scale));
 };
 
+// Two scales share one pipeline: perkScale is what the brother has now, planScale adds the stat
+// perks the tracked build still intends to take. Snapshots saved before stat perks carry neither.
+::BroLedger.scaleFor <- function(snapshot, key, field)
+{
+    if (!(key in snapshot.scale) || !this.number(snapshot.scale[key]) || snapshot.scale[key] <= 0) return null;
+    local scale = snapshot.scale[key];
+    if ((field in snapshot) && typeof snapshot[field] == "table" && (key in snapshot[field]) &&
+        this.number(snapshot[field][key]) && snapshot[field][key] > 0) scale *= snapshot[field][key];
+    return scale;
+};
+
+// The value the brother's sheet shows today: acquired perks only, never planned ones.
+::BroLedger.currentStat <- function(snapshot, key)
+{
+    if (!(key in snapshot.rawStats) || !this.number(snapshot.rawStats[key])) return null;
+    local scale = this.scaleFor(snapshot, key, "perkScale");
+    if (scale == null) return null;
+    return this.finalStat(key, snapshot.rawStats[key], scale, snapshot.initiativeLoss);
+};
+
 // Add raw growth before the native getter's one final rounding/sign operation.
 ::BroLedger.endpoint <- function(snapshot, key, normal=0, veteran=0, gifted=0, mode="mean")
 {
-    if (!(key in snapshot.rawStats) || !this.number(snapshot.rawStats[key]) ||
-        !(key in snapshot.scale) || !this.number(snapshot.scale[key]) || snapshot.scale[key]<=0) return null;
-    local scale=snapshot.scale[key], raw=snapshot.rawStats[key], gain=normal>0 ? this.gain(snapshot,key,mode) : 0;
+    if (!(key in snapshot.rawStats) || !this.number(snapshot.rawStats[key])) return null;
+    local scale = this.scaleFor(snapshot, key, "planScale");
+    if (scale == null) return null;
+    local raw=snapshot.rawStats[key], gain=normal>0 ? this.gain(snapshot,key,mode) : 0;
     if (gain==null) return null;
     raw+=normal*gain+veteran+gifted*snapshot.ranges[key][1];
     return this.finalStat(key,raw,scale,snapshot.initiativeLoss);
@@ -114,6 +155,24 @@
 ::BroLedger.forPlan <- function(snapshot, plan)
 {
     local out=this.copy(snapshot);out.giftRows=0;
+    // Stat perks the build still intends to take widen the reachable maximum without touching
+    // the brother's current value. Already acquired ones are in perkScale and must not count twice.
+    local planned=[],attributed=("statPerks" in out) && typeof out.statPerks=="table";
+    foreach (id in plan.route)
+        if ((id in this.StatPerks) && !(id in snapshot.perks) && planned.find(id)==null) planned.push(id);
+    planned.sort();
+    if (planned.len()>0)
+    {
+        local extra=this.perkScales(planned);
+        out.planScale <- ("planScale" in out) && typeof out.planScale=="table" ? out.planScale : this.perkScales([]);
+        foreach (key in this.Stats)
+        {
+            if (key in out.planScale) out.planScale[key] *= extra[key];
+            if (!attributed || !(key in out.statPerks)) continue;
+            foreach (id in planned)
+                if (key in this.StatPerks[id]) out.statPerks[key].push({id = id, acquired = false});
+        }
+    }
     if (plan.route.find("perk.gifted")!=null && !("perk.gifted" in snapshot.perks))
     {
         local known=snapshot.free>=0 && snapshot.futurePerks>=0 && snapshot.spent>=snapshot.perks.len();

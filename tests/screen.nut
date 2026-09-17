@@ -1,18 +1,20 @@
 local B=::BroLedger,cases={},defs=dofile("tests/perk_unlocks.nut");
 function commandFixture() {
-    local a={m={},getID=@() 7,getName=@() "Test",isPerkUnlockable=@(id) true},flags=libraryFlags(),store=libraryStore();
+    local actorFlags=libraryFlags();
+    local a={m={},getID=@() 7,getName=@() "Test",isPerkUnlockable=@(id) true,getFlags=@() actorFlags};
+    local flags=libraryFlags(),store=libraryStore();
     ::World<-{Flags=flags};B.ownedActor=@(id) id==7?a:null;B.readActor=@(actor) fixture();B.perkDefs=@() defs;
     B.libraryStore=@() store;B.currentEffects=@(actor,perks) {};
     local screen={m={BroLedgerContext={epoch=91,seq=-1,actor=null,
         settings={Enabled=true,LevelUpRecommendations=false,PerkHighlights=true,ShowStarterBuilds=true,ShowPerkEffects=true}}}};
-    return {actor=a,flags=flags,store=store,screen=screen,seq=0,request=function(action,extra={}) {
+    return {actor=a,flags=flags,actorFlags=actorFlags,store=store,screen=screen,seq=0,request=function(action,extra={}) {
         local d={action=action,actor=7,seq=++this.seq,epoch=91,revision=B.actorState(a).revision};
         foreach(k,v in extra)d[k]<-v;return B.command(screen,d);
     }};
 }
 cases.empty_startup_uses_production_actor_library_and_view <- function() {
-    local a=actorFixture(),flags=libraryFlags(),store=libraryStore();
-    a.getID<-@() 7;a.getName<-@() "Test";a.isGuest<-@() false;a.isAlive<-@() true;
+    local a=actorFixture(),flags=libraryFlags(),store=libraryStore(),actorFlags=libraryFlags();
+    a.getID<-@() 7;a.getName<-@() "Test";a.isGuest<-@() false;a.isAlive<-@() true;a.getFlags<-@() actorFlags;
     ::World.Flags<-flags;::World.getPlayerRoster<-@() {getAll=@() [a]};
     B.libraryStore=@() store;
     ::Const.Perks<-{Perks=[[{ID="perk.colossus",Unlocks=0,Name="Colossus",Icon="ui/perks/perk_01.png"}]]};
@@ -113,6 +115,45 @@ cases.first_block_import_keeps_saved_library_strict <- function() {
         f.request("evaluate");
         check("error" in f.request("import",{text=wire,policy="skip"}) && f.store.get()==damaged,"import repaired damaged saved library");
     }
+};
+cases.collapsed_panel_is_per_bro_and_survives_a_restart <- function() {
+    // Hélder collapses the panel on some brothers to free the sheet for EIMO's buttons.
+    // That choice belongs to the bro and must come back after closing and reopening the game.
+    local f=commandFixture();f.request("evaluate");
+    f.request("saveBuild",{definition=userBuild(),create=true});f.request("track",{build="user_1"});
+    local tracked=B.copy(B.actorState(f.actor).plan),revision=B.actorState(f.actor).revision;
+    check(!f.request("refresh").collapsed,"a brother started collapsed");
+    local r=f.request("collapse",{collapsed=true});
+    check(!("error" in r) && r.collapsed,"collapsing was rejected or not reported");
+    check(same(tracked,B.actorState(f.actor).plan),"collapsing changed the tracked plan");
+    check(B.actorState(f.actor).revision==revision,"collapsing revised tracked intent");
+    check(f.request("refresh").collapsed,"the collapsed state was forgotten immediately");
+    // The native flag container is what the campaign saves and reloads for this brother.
+    check(f.actorFlags.has(B.CollapsedFlag) && f.actorFlags.get(B.CollapsedFlag)==true,"collapsed state never reached the saved flags");
+    local reloaded={m={},getID=@() 7,getName=@() "Test",isPerkUnlockable=@(id) true,getFlags=@() f.actorFlags};
+    check(B.readCollapsed(reloaded),"a reloaded brother lost its collapsed panel");
+    // A second brother keeps its own state.
+    local other={m={},getID=@() 8,getName=@() "Other",isPerkUnlockable=@(id) true,getFlags=@() libraryFlags()};
+    check(!B.readCollapsed(other),"collapsing one brother collapsed another");
+    check(!f.request("collapse",{collapsed=false}).collapsed,"expanding was not reported");
+    check(!f.actorFlags.has(B.CollapsedFlag),"expanding left the collapsed flag behind");
+    check(!f.request("refresh").collapsed && same(tracked,B.actorState(f.actor).plan),"expanding lost the plan or the state");
+};
+cases.collapse_rejects_malformed_and_disabled_requests <- function() {
+    local f=commandFixture();f.request("evaluate");
+    foreach(extra in [{},{collapsed="yes"},{collapsed=1}]) {
+        check("error" in f.request("collapse",extra),"malformed collapse accepted");
+        check(!f.actorFlags.has(B.CollapsedFlag),"malformed collapse wrote a flag");
+    }
+    f.request("collapse",{collapsed=true});
+    // A stale callback must not flip another brother's panel.
+    foreach(extra in [{actor=8},{epoch=90},{seq=0}]) {
+        extra.collapsed<-false;check("error" in f.request("collapse",extra),"stale collapse accepted");
+    }
+    check(f.actorFlags.get(B.CollapsedFlag)==true,"stale collapse changed the saved state");
+    f.screen.m.BroLedgerContext.settings.Enabled=false;
+    check("error" in f.request("collapse",{collapsed=false}),"disabled planner accepted a collapse");
+    check(f.actorFlags.get(B.CollapsedFlag)==true,"disabled collapse changed the saved state");
 };
 cases.stale_actor_epoch_library_and_revision <- function() {
     local f=commandFixture();f.request("evaluate");f.request("saveBuild",{definition=userBuild(),create=true});

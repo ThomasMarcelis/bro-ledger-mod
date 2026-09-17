@@ -78,6 +78,74 @@ for (const failure of ['backend', 'empty response', 'transport throw']) {
     });
 }
 
+// Hélder's requirement: the panel overlaps EIMO's repair/salvage column, so each brother must be
+// collapsible, and that choice has to come back after closing and reopening the game.
+test('the panel collapses per brother, persists the choice, and restores the full plan', () => {
+    const active = {enabled: true, label: 'Saved route', projection: {horizon: 11}, jointState: 'possible',
+        statRows: [], route: {feasible: true}, order: [], flex: []};
+    const f = entryFixture(), panel = f.owner.panel;
+    f.reply({plan: active, collapsed: false});
+    const toggle = () => panel.children.find(n => n.classes.has('bl-collapse'));
+    assert.ok(toggle(), 'no collapse control on an expanded panel');
+    assert.equal(toggle().attributes['aria-expanded'], true);
+    assert.ok(descendants(panel).some(n => n.value === 'Saved route'), 'expanded panel lost its plan');
+
+    click(toggle());
+    // Collapsing must apply immediately, not wait for the round trip.
+    assert.equal(panel.classes.has('bl-collapsed'), true, 'collapsing did not change the panel');
+    assert.equal(panel.hidden, false, 'collapsed panel hid its own control');
+    assert.ok(!descendants(panel).some(n => n.value === 'Saved route'), 'collapsed panel still draws the plan');
+    assert.equal(toggle().attributes['aria-expanded'], false);
+    const sent = f.calls.at(-1).request;
+    assert.equal(sent.action, 'collapse');
+    assert.equal(sent.collapsed, true);
+    assert.equal(sent.actor, 7, 'collapse was not scoped to the selected brother');
+
+    // The backend is the source of truth on the next read, so a saved true stays collapsed.
+    f.reply({plan: active, collapsed: true});
+    assert.equal(panel.classes.has('bl-collapsed'), true, 'a reopened sheet forgot the collapsed panel');
+    click(toggle());
+    assert.equal(panel.classes.has('bl-collapsed'), false, 'expanding did not restore the panel');
+    assert.equal(f.calls.at(-1).request.collapsed, false);
+    f.reply({plan: active, collapsed: false});
+    assert.ok(descendants(panel).some(n => n.value === 'Saved route'), 'expanding lost the plan');
+});
+
+test('an empty panel offers no collapse control and a collapsed brother keeps the entry button', () => {
+    const f = entryFixture(), panel = f.owner.panel;
+    const toggle = () => panel.children.find(n => n.classes.has('bl-collapse'));
+    // Nothing to show: no frame, so no control either.
+    f.reply({plan: null, effects: null, collapsed: false});
+    assert.equal(toggle(), undefined, 'empty panel drew a collapse control');
+    assert.equal(panel.hidden, true);
+    // Learned effects alone are collapsible too.
+    const effects = {dodge: {owned: true, value: 17}, nimble: {owned: false, value: null}, battleForged: {owned: false, value: null}};
+    f.owner.request('refresh'); f.reply({plan: null, effects, collapsed: false});
+    assert.ok(toggle(), 'effect-only panel had no collapse control');
+    assert.equal(panel.find('.bl-effect').length, 1);
+    f.owner.request('refresh'); f.reply({plan: null, effects, collapsed: true});
+    assert.equal(panel.find('.bl-effect').length, 0, 'collapsed panel still drew effects');
+    assert.ok(toggle(), 'collapsed panel lost its own control');
+    // Collapsing is only a view choice; Bro Planner stays reachable.
+    assert.equal(f.owner.entry.hidden, false, 'collapsing hid the Bro Planner button');
+});
+
+test('collapsing is ignored before data and never fires for a stale brother', () => {
+    const f = entryFixture();
+    const before = f.calls.length;
+    f.owner.setCollapsed(true);
+    assert.equal(f.calls.length, before, 'collapse was sent without authorizing data');
+    const active = {enabled: true, label: 'Saved route', projection: {horizon: 11}, jointState: 'possible',
+        statRows: [], route: {feasible: true}, order: [], flex: []};
+    f.reply({plan: active, collapsed: false});
+    const stale = f.owner.panel.children.find(n => n.classes.has('bl-collapse'));
+    f.owner.screen.mDataSource.getSelectedBrother = () => ({id: 8});
+    f.owner.select();
+    const count = f.calls.length;
+    click(stale);
+    assert.equal(f.calls.length, count, 'a detached control collapsed the newly selected brother');
+});
+
 test('confirmed disable survives invalidated actor data; no selection and hidden screen hide entry', () => {
     const f = entryFixture(); f.reply({settings: {Enabled: false}});
     assert.equal(f.owner.entry.hidden, true);

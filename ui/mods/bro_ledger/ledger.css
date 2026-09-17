@@ -3,6 +3,17 @@
 .character-screen.bl-with-plan .character-screen-statuetes { left:50% !important;right:auto;margin-left:-89.4rem !important;margin-right:0 !important; }
 .character-screen .bl-panel { position:absolute;left:105rem;top:1rem;width:32rem;min-height:68rem;padding:1.4rem 1.6rem;color:#eedbb8;z-index:3;background:url('coui://gfx/ui/skin/popup_background_600x300.png') center/100% 100% no-repeat;box-sizing:border-box; }
 .bl-heading { margin:.7rem 0 .5rem;font-size:1.8rem;line-height:2.3rem;color:#efd58d; }
+/* Collapse control, in the panel's top-right corner so plan text never runs under it. */
+.bl-collapse { position:absolute;top:.8rem;right:1rem;width:2.8rem;height:2.8rem;z-index:4;
+    font-family:'FreeUniversal-Regular';font-size:2rem;line-height:2.4rem;text-align:center;
+    color:#eedbb8;background:#493b28;border:1px solid #9c8357;cursor:pointer;box-sizing:border-box; }
+.bl-collapse:hover { background:#665132;color:#efd58d; }
+.bl-collapse:focus { outline:.2rem solid #efd58d; }
+/* Collapsed: no frame and no width beyond the control, so EIMO's button column stays clickable. */
+.character-screen .bl-panel.bl-collapsed { min-height:0;width:4.8rem;height:4.4rem;padding:0;background:none; }
+.bl-panel.bl-collapsed .bl-collapse { top:.4rem;right:.4rem; }
+/* The expanded panel reserves the corner so the title cannot sit under the control. */
+.bl-panel .bl-plan-title { padding-right:3.4rem; }
 .bl-line { font-size:1.6rem;line-height:2.1rem;margin:0 0 .6rem; }
 .bl-plan-title { margin:0;font-size:1.8rem;line-height:2.3rem;overflow-wrap:break-word;word-wrap:break-word; }
 .bl-muted { color:#cfbd9f; }
@@ -106,6 +117,9 @@
 .bl-tag:hover,.bl-flex-control:hover { background:rgba(239,213,141,.1); }
 .bl-board-perks .bl-tag { width:33.33%; }
 .bl-tag-icon { width:2rem;height:2rem;vertical-align:middle;margin-right:.3rem; }
+/* Perk credit beside a Potential value: small enough not to crowd the number it explains. */
+.bl-perk-mark { display:inline-block;margin-left:.4rem;vertical-align:middle;font-size:1.2rem;color:#c2b280; }
+.bl-perk-mark img { width:1.8rem;height:1.8rem;vertical-align:middle; }
 .bl-compare .icheckbox_flat-orange { width:2rem;height:2rem;margin:0 .6rem 0 0;vertical-align:middle;background-image:url('coui://ui/extern/iCheck/skins/flat/orange.png');background-size:17.6rem 2.2rem;background-position:0 0; }
 .bl-compare .icheckbox_flat-orange.checked { background-position:-2.2rem 0; }
 .bl-compare .icheckbox_flat-orange.disabled { background-position:-4.4rem 0; }

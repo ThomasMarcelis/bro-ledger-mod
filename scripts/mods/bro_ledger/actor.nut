@@ -111,7 +111,21 @@
         {
             snapshot.scale[key] *= natural[field];
         }
-        snapshot.stats[key]=this.endpoint(snapshot,key);
+    }
+    // Acquired stat perks apply to the brother now; planning has not happened yet, so both
+    // scales start equal and forPlan widens planScale for the tracked build's intent.
+    local acquired = [];
+    foreach (id, _ in snapshot.perks) if (id in this.StatPerks) acquired.push(id);
+    acquired.sort();
+    snapshot.perkScale <- this.perkScales(acquired);
+    snapshot.planScale <- this.copy(snapshot.perkScale);
+    snapshot.statPerks <- {};
+    foreach (key in this.Stats)
+    {
+        snapshot.statPerks[key] <- [];
+        foreach (id in acquired)
+            if (key in this.StatPerks[id]) snapshot.statPerks[key].push({id = id, acquired = true});
+        snapshot.stats[key] = this.currentStat(snapshot, key);
     }
     local maxLevel = ::Const.XP.MaxLevelWithPerkpoints;
     // Manhunters onUpdateLevel/onUnlockPerk apply the Indebted cap and Student refund at 7.

@@ -11,7 +11,7 @@ try
     loadfile("tests/runtime_audit.nut");
     dofile("tests/fixtures.nut");
     local count=0;
-    foreach (file in ["weighted","community","growth","plan","reader","state","screen","audit"])
+    foreach (file in ["weighted","community","growth","plan","reader","perkstats","state","screen","audit"])
     {
         local cases=dofile("tests/"+file+".nut"), names=[];
         foreach (name, test in cases) names.push(name);

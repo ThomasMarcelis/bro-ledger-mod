@@ -1,5 +1,21 @@
 ::BroLedger.SchemaFlag <- "BroLedger.Schema";
 ::BroLedger.BlobFlag <- "MSU.mod_bro_ledger.Plan";
+::BroLedger.CollapsedFlag <- "BroLedger.Collapsed";
+
+// A plain native flag: the brother's own flag container is saved and loaded with the campaign,
+// so a collapsed panel stays collapsed across restarts without touching the plan schema.
+::BroLedger.readCollapsed <- function(actor)
+{
+    local flags = actor.getFlags();
+    return flags.has(this.CollapsedFlag) && flags.get(this.CollapsedFlag) == true;
+};
+
+::BroLedger.writeCollapsed <- function(actor, collapsed)
+{
+    local flags = actor.getFlags();
+    if (collapsed) flags.set(this.CollapsedFlag, true);
+    else flags.remove(this.CollapsedFlag);
+};
 
 ::BroLedger.validString <- function(value, maxLength = 160)
 {
