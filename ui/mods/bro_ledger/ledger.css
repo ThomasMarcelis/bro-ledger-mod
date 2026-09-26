@@ -1,7 +1,8 @@
 /* Native sheet controls and perk cells retain their geometry. */
 .character-screen .bl-entry { position:absolute;left:9rem;right:0;top:-4.9rem;margin:0 auto;width:17.5rem;height:4.3rem;line-height:3rem; }
 .character-screen.bl-with-plan .character-screen-statuetes { left:50% !important;right:auto;margin-left:-89.4rem !important;margin-right:0 !important; }
-.character-screen .bl-panel { position:absolute;left:105rem;top:1rem;width:32rem;min-height:68rem;padding:1.4rem 1.6rem;color:#eedbb8;z-index:3;background:url('coui://gfx/ui/skin/popup_background_600x300.png') center/100% 100% no-repeat;box-sizing:border-box; }
+/* The panel ends with the sheet; the longest plan scrolls instead of running off screen. */
+.character-screen .bl-panel { position:absolute;left:105rem;top:1rem;width:32rem;min-height:68rem;max-height:77.2rem;overflow-y:auto;padding:1.4rem 1.6rem;color:#eedbb8;z-index:3;background:url('coui://gfx/ui/skin/popup_background_600x300.png') center/100% 100% no-repeat;box-sizing:border-box; }
 .bl-heading { margin:.7rem 0 .5rem;font-size:1.8rem;line-height:2.3rem;color:#efd58d; }
 /* Collapse control, in the panel's top-right corner so plan text never runs under it. */
 .bl-collapse { position:absolute;top:.8rem;right:1rem;width:2.8rem;height:2.8rem;z-index:4;
@@ -69,7 +70,7 @@
 .bl-compare input,.bl-compare textarea { -webkit-user-select:text;user-select:text; }
 .bl-compare select { min-width:16rem; }
 .bl-compare-columns { position:absolute;left:0;right:0;top:16rem;bottom:0; }
-.bl-build-list { position:absolute;top:0;left:0;bottom:0;width:39%;background:#29241c; }
+.bl-build-list { position:absolute;top:0;left:0;bottom:0;width:39%;background:#29241c;overflow-y:auto; }
 .bl-build-details { position:absolute;top:0;right:0;bottom:0;width:59%;padding:1rem;box-sizing:border-box;background:#252019;overflow-y:auto; }
 .bl-catalog-body { padding:.5rem; }
 .bl-build-row { position:relative;min-height:4rem;padding:.4rem 9rem .4rem .6rem;font-size:1.6rem;line-height:2rem;border-bottom:1px solid #5a4c36;color:#eedbb8;box-sizing:border-box; }
@@ -147,6 +148,24 @@
     .bl-board-perks { display:block;width:100%;padding-left:0; }
     .bl-input-targets { max-width:60rem; }
     .bl-board-targets .bl-tag { width:20%; }
+}
+/* Up to 1736px the centred native sheet leaves no room for the column, so the sheet and column are
+   always centred together; the sheet then stays put whatever the selected brother's panel shows. */
+@media (max-width:1736px) {
+    .character-screen .character-screen-statuetes { left:50% !important;right:auto;margin-left:-89.4rem !important;margin-right:0 !important; }
+}
+/* Steam Deck width: the column narrows to the space beside the whole native sheet, where two
+   perk columns would split names, so the order is one column. */
+@media (max-width:1389px) {
+    .character-screen .character-screen-statuetes,.character-screen.bl-with-plan .character-screen-statuetes { margin-left:-84.4rem !important; }
+    .character-screen .bl-panel { width:22rem; }
+    .bl-compact-route .bl-route-item { width:100%; }
+}
+/* Below 876px the space above the native header is off screen, so the entry heads the column.
+   The native tab strip is 200rem wide and transparent; the entry must paint above it, like the panel. */
+@media (max-height:875px) {
+    .character-screen .bl-entry { left:105rem;right:auto;top:1rem;margin:0;z-index:3; }
+    .character-screen .bl-panel { top:6.2rem;max-height:72rem; }
 }
 .bl-share-text { display:block;width:100%;height:34rem;margin:1.5rem 0;resize:none; }
 /* Above the native scroll control, which sets z-index 10001 and would otherwise paint perk rows over the message. */

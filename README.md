@@ -17,6 +17,7 @@ Requires Battle Brothers 1.5.2.3 with all DLC, [Modern Hooks](https://github.com
 To remove, delete the ZIP. Your library and tracked plans are left in place for a reinstall.
 
 Tested in a live campaign on Battle Brothers 1.5.2.3 with Modern Hooks 0.6.0 and MSU 1.9.0 alongside a full mod stack. As with any mod, back up your saves before installing.
+Version 1.0.1 has a live Steam Deck layout pass at 1280×800 and 100% UI scale: tracked and untracked brothers, panel controls and perk-order scrolling. Tom confirmed Steam Deck testing and approved publication on 2026-09-26. Larger UI scales at that resolution may clip the native character sheet.
 
 ## Use
 
