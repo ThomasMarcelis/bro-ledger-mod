@@ -84,22 +84,22 @@ cases.gradual_threshold_and_joint_budget <- function() {
     s.stats.matk=59;s.stats.mdef=10;local low=B.assess(s,p,b.preferred);
     s.stats.matk=60;local middle=B.assess(s,p,b.preferred);
     s.stats.matk=61;local high=B.assess(s,p,b.preferred);
-    check(low.score<middle.score && middle.score<high.score && middle.score-low.score<1,"Minimum creates a cliff or irrelevant excess compensates");
+    check(low.score>middle.score && middle.score>high.score && low.score-middle.score<1,"Minimum creates a cliff or irrelevant excess compensates");
     b.targets={hp=1,resolve=1,fatigue=1,initiative=1};b.preferred={hp=3,resolve=3,fatigue=3,initiative=3};b.route=[];b.flex=[];
     s=fixture();s.normalRows=1;local e=B.evaluate(s,b,defs);
-    check(e.score==75 && e.jointState=="impossible","independent maxima treated as joint feasible");
+    check(e.score==0.075 && e.jointState=="impossible","independent maxima treated as joint feasible");
     foreach(row in e.statRows) if(row.ideal!=null) check(row.idealState=="grow","joint deficit falsely painted individual red");
 };
 cases.arnold_and_hadebrand_no_letter_cliff <- function() {
     local b=userBuild();b.targets={ratk=85,mdef=10};b.preferred={ratk=90,mdef=15};
     b.route=[];b.flex=[];local s=fixture();s.normalRows=0;s.stats.ratk=83;s.stats.mdef=9;
-    local e=B.evaluate(s,b,defs);check(e.score>46 && e.score<47 && !("nowGrade" in e) && !("grade" in e),"Arnold retains letter grading");
-    s.stats.ratk=85;s.stats.mdef=10;check(B.evaluate(s,b,defs).score==50,"Minimum anchor changed");
+    local e=B.evaluate(s,b,defs);check(fabs(e.score-16.0/30)<0.0001 && !("nowGrade" in e) && !("grade" in e),"Arnold retains letter grading");
+    s.stats.ratk=85;s.stats.mdef=10;check(B.evaluate(s,b,defs).score>0.4 && B.evaluate(s,b,defs).score<0.42,"Minimum incorrectly used as score anchor");
     // Synthetic level-one reconstruction: 39 RAtk + ten two-star rows + Gifted = 83 even at maximum.
     s=fixture();s.stats.ratk=39;s.stats.mdef=9;s.stars.ratk=2;
     b.route=["perk.colossus","perk.gifted"];b.flex=[];
     e=B.evaluate(s,b,defs);
-    check(e.projection.stats.ratk==83&&e.score>74&&e.score<75,"83-versus-85 Potential received a hard cliff");
+    check(e.projection.stats.ratk==83&&fabs(e.score-7.0/30)<0.0001,"83-versus-85 Potential received a hard cliff");
     b.route=[];
     s=fixture();s.stats.ratk=45;s.stats.mdef=0;s.normalRows=10;
     e=B.evaluate(s,b,defs);check(e.score>0 && !("nowGrade" in e),"Hadebrand forced to NOW F");
@@ -110,7 +110,7 @@ cases.snapshot_and_many_library_matches <- function() {
     b.label="Edited";b.preferred.matk=100;check(same(p,saved),"library edit rewrote tracked intent");
     for(local i=0;i<14;i++){local x=userBuild("build_"+i);x.targets={hp=20+i};x.preferred={hp=40+i};list.push(x);}
     local ranked=B.compare(s,defs,list).builds;check(ranked.len()==14,"results truncated before top ten");
-    for(local i=1;i<ranked.len();i++) check(ranked[i-1].score>=ranked[i].score,"ranking not potential-only");
+    for(local i=1;i<ranked.len();i++) check(ranked[i-1].score<=ranked[i].score,"ranking not potential-only");
     b.targets={};b.preferred={};check(B.evaluate(s,b,defs).score==null,"untargeted build fabricated score");
 };
 

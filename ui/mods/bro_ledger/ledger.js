@@ -129,7 +129,7 @@ var BroLedgerUI = (function () {
         }); });
     };
     function valueLabel(value) { return value == null ? '?' : String(Number(value.toFixed(2))); }
-    function scoreLabel(build) { return build.score == null ? 'Unrated' : valueLabel(build.score) + '/100'; }
+    function scoreLabel(build) { return build.score == null ? 'Unrated' : 'Gap ' + (build.score > 0 && build.score < 0.01 ? '<0.01' : valueLabel(build.score)); }
     function matches(build, weapon, style, source) {
         return (weapon === 'All' || build.weaponTags.indexOf(weapon) !== -1) &&
             (style === 'All' || build.playstyleTags.indexOf(style) !== -1) &&
@@ -271,7 +271,7 @@ var BroLedgerUI = (function () {
         var body = $('<div class="bl-compare-body"/>').appendTo(popup.findPopupDialogContentContainer());
         var context = $('<div class="bl-compare-context"/>').appendTo(body);
         text(context, data.name + (hasStarters ? ' · Builds and starter templates' : ' · My builds'), true);
-        tooltip(text(context, 'Potential: weighted target fit using one shared allocation.'), 'potential');
+        tooltip(text(context, 'Goal gap: lower is closer. One allocation at average rolls.'), 'potential');
         var tools = $('<div class="bl-toolbar"/>').appendTo(context);
         button(tools, 'Create build', function () { if (self.current(data,popup)) self.editor(data,null); });
         button(tools, 'Import', function () { if (self.current(data,popup)) self.share(data,null); });
@@ -393,7 +393,7 @@ var BroLedgerUI = (function () {
         var fields=$('<div class="bl-board-fields"/>').appendTo(main),left=$('<div class="bl-board-targets"/>').appendTo(fields);
         var middle=$('<div class="bl-board-perks"/>').appendTo(fields),right=$('<div class="bl-board-order"/>').appendTo(board);
         text(left,'Attributes Ranges',true);text(left,'Ranges: 0–500, two decimals. Blank pair = ignored.');
-        text(left,'Weight 0–10: 0 or empty ignores the attribute; 2 = twice 1.');
+        tooltip(text(left,'Weight 0–10 per ordinary roll toward Ideal. 0 ignores; Minimum breaks ties.'), 'potential');
         var targetTable=$('<table class="bl-targets bl-input-targets"/>').appendTo(left),inputs={};
         var targetHead=$('<tr/>').appendTo($('<thead/>').appendTo(targetTable));
         ['Attribute','Minimum','Ideal','Weight'].forEach(function(label){$('<th/>').text(label).appendTo(targetHead);});

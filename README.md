@@ -16,8 +16,9 @@ Requires Battle Brothers 1.5.2.3 with all DLC, [Modern Hooks](https://github.com
 
 To remove, delete the ZIP. Your library and tracked plans are left in place for a reinstall.
 
-Tested in a live campaign on Battle Brothers 1.5.2.3 with Modern Hooks 0.6.0 and MSU 1.9.0 alongside a full mod stack. As with any mod, back up your saves before installing.
-Version 1.0.1 has a live Steam Deck layout pass at 1280×800 and 100% UI scale: tracked and untracked brothers, panel controls and perk-order scrolling. Tom confirmed Steam Deck testing and approved publication on 2026-09-26. Larger UI scales at that resolution may clip the native character sheet.
+**1.1.0 is an unverified prerelease.** The scoring redesign passes standalone checks and browser preflight with the native/production fixture at 1920×1080, 2560×1440, 1600×900 and 1280×800. Browser fixtures do not verify the game VM or real game transport; in-game player-loop and save/removal/reinstall validation remain pending. Earlier 1.0.1 live and Steam Deck layout evidence does not certify this version.
+
+**Scoring changed for all builds and saved plans.** Weights now value progress in fixed ordinary-roll units toward Ideal; Minimum breaks exact ties instead of marking half satisfaction. Saved numbers and plans remain intact, but forecasts, advice and ranking can change. Review your tracked goals after upgrading. BL1/BL2 text remains readable; older mod versions score the same text differently.
 
 ## Use
 
@@ -27,7 +28,7 @@ Open a brother and select **Bro Planner**.
 
 **Perk order.** Mandatory perks must fit a brother's points (10, or 11 with Student) and respect unlock tiers. Mark a perk **Flexible** to keep it as an alternate that yields to whatever you learn manually. Flexible perks sit on top of the budget, up to 20 perks in total. Hover a perk for its description.
 
-**Compare.** **Potential** scores how well a brother can satisfy a build's weighted targets with one legal allocation at average rolls. It measures fit to the creator's targets, not combat power. Colossus and Fortified Mind count: once acquired they raise the brother's current HP/Resolve, and while only planned they raise the reachable maximum, marked with that perk's icon beside the Potential value. Filter by weapon, playstyle and source. Ten results per page.
+**Compare.** **Goal gap** ranks remaining weighted Ideal shortfall after one legal allocation at average rolls. Lower is closer; zero means the Ideals fit. Weights use a shared 0–10 importance scale; weighted shortfall is divided by a fixed 10. Completed goals add no gap. Scaling every weight equally preserves stat choices but scales the gap and can change cross-build ranking. Inspect the Minimum/Ideal rows: this measures proximity to creator goals, not combat power. The **Potential** stat column shows that allocation. Colossus and Fortified Mind count: acquired perks raise current HP/Resolve; planned perks raise the forecast and carry a perk mark. Perk-route conflicts remain separate. Filter by weapon, playstyle and source. Ten results per page.
 
 **Track.** **Track build** saves a snapshot to the brother. The character sheet then shows progress per goal (green met, yellow in progress, red unreachable), the perk route, current Dodge/Nimble/Battle Forged contributions, and rates level-up rolls by the build's weights. **Disable** pauses a plan, **Re-enable** restores it, **Change build** swaps it. Collapse the sheet panel to free space for other mods' controls; that choice is per brother and survives a restart. Editing a library build doesn't change tracked brothers; track it again to update them.
 

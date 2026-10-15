@@ -132,9 +132,9 @@ cases.potential_score_rewards_builds_that_plan_the_right_perk <- function() {
     // Average rolls: 66 + 4*3 = 78, and floor(78 * 1.25) = 97.
     check(a.projection.stats.hp==78,"unperked forecast changed");
     check(b.projection.stats.hp==97,"perk-aware forecast did not apply the planned multiplier");
-    check(a.score==63.33,"unperked score changed");
-    check(b.score==95.0,"planned perk did not improve the fit score");
-    check(b.score>a.score,"the perk-planning build does not rank higher");
+    check(fabs(a.score-22.0/3)<0.0001,"unperked score changed");
+    check(b.score==1.0,"planned perk did not improve the fit score");
+    check(b.score<a.score,"the perk-planning build does not rank higher");
 };
 
 cases.perk_attribution_is_exposed_for_the_icon <- function() {

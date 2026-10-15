@@ -9,7 +9,7 @@ Squirrel owns actor reads, the finite evaluator, definition validation, library 
 | `core.nut` | Constants, native stat endpoints, stat-scaling perks, Gifted availability, finite allocation feasibility. |
 | `library.nut` | Player-wide library via MSU PersistentData, one-way adoption of legacy campaign flags, bounded definitions/weights, inert BL1/BL2 sharing, duplicate policy. |
 | `starters.nut` | Ten original read-only templates, independent of campaign flags. |
-| `fit.nut` | Weighted shared-allocation Potential, progression bounds, comparison order, visible-roll advice. |
+| `fit.nut` | Fixed-roll weighted goal gap, progression bounds, comparison order, visible-roll advice. |
 | `plan.nut` | Snapshot creation, manual perk reconciliation, legal routes and legacy alternatives. |
 | `actor.nut` / `equipment.nut` | Safe live facts and current learned perk effects. |
 | `state.nut` | Namespaced actor flags and immutable plan schemas 1–5. |
@@ -39,11 +39,11 @@ python3 tools/check.py
 python3 tools/package.py
 ```
 
-Checks require a Squirrel success marker and empty stderr, run Node behavior tests, and check JS syntax. Tests cover allocation against exhaustive legal schedules, normalization, target scoring, import/export and corruption limits, persistence rollback, old snapshots, native settings, manual/locked perks and stale callbacks. Obsolete tactical catalog gates are retired.
+Checks require a Squirrel success marker and empty stderr, run Node behavior tests, and check JS syntax. Tests cover allocation against exhaustive legal schedules, normalization, lexicographic Ideal/Minimum shortfalls, goal and weight transformations, import/export and corruption limits, persistence rollback, old snapshots, native settings, manual/locked perks and stale callbacks. Obsolete tactical catalog gates are retired.
 
 Before packaging, also run `tests/run.nut` and `tests/settings.nut` with a Squirrel 3.0.x runner, requiring the same success marker and empty stderr. The settings suite executes queued preload includes and registered refresh/Evaluate callbacks. Squirrel 3.2 accepts adjacent same-line `if` statements that 3.0.x rejects without a separating newline or semicolon; a compile failure prevents the entire library chunk from registering.
 
-Packaging reads the version from `core.nut` and creates a deterministic `dist/mod_bro_ledger-<version>.zip` (currently 1.0.1) from original runtime files, README, MIT license, notices, and these two guides. Tools, dependencies, game assets, saves, fixtures and private evidence are excluded. `--audit` builds the separate owned runtime observer for disposable-campaign checks; it is not part of the player ZIP. Its queued command wrapper has a regression for forwarding, gameplay changes, RNG calls, and exception cleanup.
+Packaging reads the version from `core.nut` and creates a deterministic `dist/mod_bro_ledger-<version>.zip` (currently 1.1.0, unverified prerelease) from original runtime files, README, MIT license, notices, and these two guides. Tools, dependencies, game assets, saves, fixtures and private evidence are excluded. `--audit` builds the separate owned runtime observer for disposable-campaign checks; it is not part of the player ZIP. Its queued command wrapper has a regression for forwarding, gameplay changes, RNG calls, and exception cleanup.
 
 ## Acceptance boundary
 
