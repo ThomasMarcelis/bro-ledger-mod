@@ -16,7 +16,7 @@ Requires Battle Brothers 1.5.2.3 with all DLC, [Modern Hooks](https://github.com
 
 To remove, delete the ZIP. Your library and tracked plans are left in place for a reinstall.
 
-**1.1.0 is an unverified prerelease.** The scoring redesign passes standalone checks and browser preflight with the native/production fixture at 1920×1080, 2560×1440, 1600×900 and 1280×800. Browser fixtures do not verify the game VM or real game transport; in-game player-loop and save/removal/reinstall validation remain pending. Earlier 1.0.1 live and Steam Deck layout evidence does not certify this version.
+**1.2.0 is an unverified prerelease.** Free perk order, Copy & edit, the pre-0.7 cleanup and 1.1.0's scoring redesign pass standalone checks. 1.1.0 also passed browser preflight at 1920×1080, 2560×1440, 1600×900 and 1280×800; 1.2.0's editor changes have not had a fresh rendered check. Neither verifies the game VM or real game transport; in-game player-loop and save/removal/reinstall validation remain pending. Earlier 1.0.1 live and Steam Deck layout evidence does not certify this version.
 
 **Scoring changed for all builds and saved plans.** Weights now value progress in fixed ordinary-roll units toward Ideal; Minimum breaks exact ties instead of marking half satisfaction. Saved numbers and plans remain intact, but forecasts, advice and ranking can change. Review your tracked goals after upgrading. BL1/BL2 text remains readable; older mod versions score the same text differently.
 
@@ -32,9 +32,9 @@ Open a brother and select **Bro Planner**.
 
 **Track.** **Track build** saves a snapshot to the brother. The character sheet then shows progress per goal (green met, yellow in progress, red unreachable), the perk route, current Dodge/Nimble/Battle Forged contributions, and rates level-up rolls by the build's weights. **Disable** pauses a plan, **Re-enable** restores it, **Change build** swaps it. Collapse the sheet panel to free space for other mods' controls; that choice is per brother and survives a restart. Editing a library build doesn't change tracked brothers; track it again to update them.
 
-**Share.** **Export** copies one build, or **Export my builds** for all, as text; Ctrl+C to copy. **Import** accepts BL2 text (Bro Planner 0.5+), pasted or via **Paste clipboard**. Builds that skip tiers or exceed the point budget need 1.1+ to import. Duplicates are rejected unless you choose **Skip duplicates** or **Import copies**. Nothing goes over the network.
+**Share.** **Export** copies one build, or **Export my builds** for all, as text; Ctrl+C to copy. **Import** accepts BL2 text (Bro Planner 0.5+), pasted or via **Paste clipboard**. Builds that skip tiers or exceed the point budget need 1.2+ to import. Duplicates are rejected unless you choose **Skip duplicates** or **Import copies**. Nothing goes over the network.
 
-**Library.** Up to 32 personal builds, stored with your MSU mod settings and shared across campaigns. Upgrading from before 0.7: first load each old campaign once with 1.0.0 so its builds move into the shared library (or export them as BL2 text from 1.0.0). Since 1.1, builds stored inside a campaign are no longer moved over, and plans tracked before 0.5 can't be read; those brothers show a notice to track a build again.
+**Library.** Up to 32 personal builds, stored with your MSU mod settings and shared across campaigns. Upgrading from before 0.7: first load each old campaign once with 1.1.0 so its builds move into the shared library (or export them as BL2 text from 1.1.0). Since 1.2, builds stored inside a campaign are no longer moved over, and plans tracked before 0.5 can't be read; those brothers show a notice to track a build again.
 
 **Settings.** Mod Options toggles the planner, perk highlights and level-up advice. Turn off **Show starter builds** to compare only personal builds; copies and tracked plans are kept. Turn off **Show current perk effects** to hide the Dodge, Nimble and Battle Forged readouts. Both default to on. Reopen the sheet after changing settings. If a request fails, use **Retry**.
 
