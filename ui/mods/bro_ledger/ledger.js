@@ -456,7 +456,7 @@ var BroLedgerUI = (function () {
             unlocks.forEach(function(unlock,k){needed=Math.max(needed,unlock+unlocks.length-k);});
             var filler=needed-unlocks.length;
             count.text(mandatory+' mandatory, '+(b.route.length-mandatory)+' flexible, '+filler+' filler pick'+(filler===1?'':'s')+'. '+
-                (needed>budget?'Needs '+needed+' picks, budget '+budget+(student?'.':' (Student as mandatory adds 1).'):'Needs '+needed+' of '+budget+' picks.'))
+                (needed>budget?'Needs '+needed+' picks, budget '+budget+(student?'.':' (taking Student refunds one pick).'):'Needs '+needed+' of '+budget+' picks.'))
                 .toggleClass('bl-warning',needed>budget);
             layoutOrder();
         }

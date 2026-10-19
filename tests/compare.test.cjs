@@ -207,7 +207,7 @@ test('free-order counts fillers, warns over budget and relayouts Flexible change
     assert.equal(counter.classes.has('bl-warning'),false);
     assert.ok(s.byClass('bl-edit-perk').every(n=>!n.classes.has('bl-target-impossible')));
     click(choices[5]);
-    assert.equal(counter.text(),'6 mandatory, 0 flexible, 5 filler picks. Needs 11 picks, budget 10 (Student as mandatory adds 1).');
+    assert.equal(counter.text(),'6 mandatory, 0 flexible, 5 filler picks. Needs 11 picks, budget 10 (taking Student refunds one pick).');
     assert.equal(counter.classes.has('bl-warning'),true);
     const flex=s.byClass('bl-edit-perk')[5].children[1].children[2].children[0],host=s.byClass('bl-order-list-host')[0];
     header.outerHeight=()=>92;flex.prop('checked',true).trigger('ifChecked');
