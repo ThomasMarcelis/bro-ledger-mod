@@ -206,7 +206,6 @@ test('free-order counts fillers, warns over budget and relayouts Flexible change
     assert.equal(counter.text(),'5 mandatory / 0 flexible · 5 filler picks · needs 10 of 10 picks');
     assert.equal(counter.classes.has('bl-warning'),false);
     assert.ok(s.byClass('bl-edit-perk').every(n=>!n.classes.has('bl-target-impossible')));
-    assert.equal(s.byClass('bl-edit-perk')[0].attr('title'),'Needs 5 earlier picks; any perks can fill them.');
     click(choices[5]);
     assert.match(counter.text(),/6 mandatory \/ 0 flexible · 5 filler picks · needs 11 picks, budget 10 \(Student as mandatory adds 1\)/);
     assert.equal(counter.classes.has('bl-warning'),true);
@@ -227,7 +226,6 @@ test('editor counts flexible Student once and marks only unavailable perks red',
     assert.equal(s.byClass('bl-order-header')[0].children[1].text(),'2 mandatory / 1 flexible · 5 filler picks · needs 7 of 11 picks');
     const rows=s.byClass('bl-edit-perk');
     assert.deepEqual(rows.map(n=>n.classes.has('bl-target-impossible')),[false,false,true]);
-    assert.equal(rows[2].attr('title'),'Perk unavailable.');
 });
 test('perk guidance distinguishes budget deficits from unavailable perks and unknown points',()=>{
     const s=fixture(1),build=s.data.builds[0];

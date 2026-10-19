@@ -1,8 +1,8 @@
 var BroLedgerUI = (function () {
     'use strict';
     var sequence = 0;
-    // Mandatory picks must fit a brother's perk points; flexible alternates sit on top of that.
-    var MANDATORY_LIMIT = 11, ROUTE_LIMIT = 20;
+    // A brother has 10 perk points, 11 when Student refunds one. The budget is advice, never a save rule.
+    var PERK_POINTS = 10, ROUTE_LIMIT = 20;
     var names = {hp: 'HP', resolve: 'Resolve', fatigue: 'Fatigue', initiative: 'Initiative',
         matk: 'Melee skill', ratk: 'Ranged skill', mdef: 'Melee defence', rdef: 'Ranged defence'};
     var offerFields = {hp: 'hitpointsIncrease', resolve: 'braveryIncrease', fatigue: 'fatigueIncrease',
@@ -450,7 +450,7 @@ var BroLedgerUI = (function () {
         var routeVersion=0;
         function updateCount(){
             var ids=b.route.filter(function(id){return b.flex.indexOf(id)===-1;}),mandatory=ids.length;
-            var student=b.route.indexOf('perk.student')!==-1,budget=MANDATORY_LIMIT-1+(student?1:0);
+            var student=b.route.indexOf('perk.student')!==-1,budget=PERK_POINTS+(student?1:0);
             if(student&&ids.indexOf('perk.student')===-1)ids.push('perk.student');
             var unlocks=ids.filter(function(id){return !!data.defs[id];}).map(function(id){return data.defs[id].unlock;}).sort(function(a,c){return a-c;}),needed=unlocks.length;
             unlocks.forEach(function(unlock,k){needed=Math.max(needed,unlock+unlocks.length-k);});

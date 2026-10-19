@@ -37,15 +37,15 @@ cases.priority_route_uses_fillers_and_warns_over_budget <- function() {
 cases.student_budget_is_independent_of_optional_order <- function() {
     local s=fixture();s.spent=5;s.free=1;s.futurePerks=0;
     local p={route=["perk.killing_frenzy","perk.student"],flex=["perk.student"]},r=B.route(p,s,defs);
-    check(r.feasible && r.needed==2 && r.points==2 && r.studentRefund,"flexible Student did not fund a Manhunter's mandatory pick");
+    check(r.feasible && r.needed==2 && r.points==2,"flexible Student did not fund a Manhunter's mandatory pick");
     s.spent=9;p.route=["perk.student","perk.killing_frenzy","perk.fearsome"];r=B.route(p,s,defs);
     check(!r.feasible && r.needed==3 && r.points==2,"flexible Student supplied two points without costing its own pick");
     s.spent=5;p.route=["perk.colossus","perk.student","perk.killing_frenzy"];p.flex=["perk.colossus"];r=B.route(p,s,defs);
     check(r.feasible && r.needed==2 && r.points==2,"earlier flexible pick suppressed Student's refund");
     s.free=0;r=B.route(p,s,defs);
-    check(!r.feasible && r.points==0 && !r.studentRefund,"Student borrowed an unavailable acquisition point");
+    check(!r.feasible && r.points==0,"Student borrowed an unavailable acquisition point");
     s.perks["perk.student"]<-true;s.spent++;s.futurePerks=1;r=B.route(p,s,defs);
-    check(r.feasible && r.needed==1 && r.points==1 && !r.studentRefund,"owned Student's pending refund counted twice");
+    check(r.feasible && r.needed==1 && r.points==1,"owned Student's pending refund counted twice");
 };
 cases.unavailable_perks_and_unknown_points_stay_infeasible <- function() {
     local s=fixture(),p={route=["perk.unknown","perk.killing_frenzy"],flex=[]},r=B.route(p,s,defs);

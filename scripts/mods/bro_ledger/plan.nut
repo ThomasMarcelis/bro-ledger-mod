@@ -86,7 +86,7 @@
         spent++;
     }
     return {remaining = order, blocked = work, acquired = acquired, offplan = offplan, unknown = unknown,
-        pointsKnown = pointsKnown, points = points, studentRefund = refund,
+        pointsKnown = pointsKnown, points = points,
         needed = needed, filler = ::Math.max(0, needed - mandatoryRemaining.len()),
         feasible = pointsKnown && unknown.len() == 0 && needed <= points,
         next = pointsKnown && snapshot.free > 0 && order.len() > 0 && defs[order[0]].unlock <= snapshot.spent ? order[0] : null};

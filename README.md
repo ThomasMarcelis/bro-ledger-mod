@@ -34,7 +34,7 @@ Open a brother and select **Bro Planner**.
 
 **Share.** **Export** copies one build, or **Export my builds** for all, as text; Ctrl+C to copy. **Import** accepts BL2 text (Bro Planner 0.5+), pasted or via **Paste clipboard**. Builds that skip tiers or exceed the point budget need 1.1+ to import. Duplicates are rejected unless you choose **Skip duplicates** or **Import copies**. Nothing goes over the network.
 
-**Library.** Up to 32 personal builds, stored with your MSU mod settings and shared across campaigns. Upgrading from before 0.7: load each old campaign once with 1.0.0, or export its builds, first. Since 1.1, builds stored inside a campaign are no longer moved over, and plans tracked before 0.5 can't be read; those brothers show a notice to track a build again.
+**Library.** Up to 32 personal builds, stored with your MSU mod settings and shared across campaigns. Upgrading from before 0.7: first load each old campaign once with 1.0.0 so its builds move into the shared library (or export them as BL2 text from 1.0.0). Since 1.1, builds stored inside a campaign are no longer moved over, and plans tracked before 0.5 can't be read; those brothers show a notice to track a build again.
 
 **Settings.** Mod Options toggles the planner, perk highlights and level-up advice. Turn off **Show starter builds** to compare only personal builds; copies and tracked plans are kept. Turn off **Show current perk effects** to hide the Dodge, Nimble and Battle Forged readouts. Both default to on. Reopen the sheet after changing settings. If a request fails, use **Retry**.
 

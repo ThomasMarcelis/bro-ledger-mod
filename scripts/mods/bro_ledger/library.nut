@@ -1,7 +1,5 @@
 // Inert definitions owned by the player, not by one campaign. Built-in templates stay outside this store.
 ::BroLedger.LibraryLimit <- 32;
-// A brother can spend at most 10 points, or 11 when Student refunds one. This budget is advisory.
-::BroLedger.MandatoryLimit <- 11;
 ::BroLedger.RouteLimit <- 20;
 ::BroLedger.ShareLimit <- 48000;
 ::BroLedger.WeaponTags <- ["Shield","Spear","Sword","Hammer","Axe","Mace","Flail","Cleaver","Whip","Dagger","Polearm","Bow","Crossbow","Throwing","Handgonne","Net","Two-handed","Light armour","Heavy armour"];
@@ -63,7 +61,7 @@
     }
     if(!this.validID(b.id)) out.push("Build ID is invalid.");
     // Empty and 0 mean the same thing: the attribute is ignored.
-    if(typeof b.weights=="table") {
+    if("weights" in b && typeof b.weights=="table") {
         local bad=[];
         foreach(k in this.Stats)
             if(!(k in b.weights) || typeof b.weights[k]!="integer" || b.weights[k]<0 || b.weights[k]>10)
@@ -183,7 +181,7 @@
     local put=function(value){local s=value.tostring();out+=s.len()+":"+s;};
     put(builds.len());
     foreach(b in builds) {
-        if(!this.validBuild(b,defs) || b.id in seen) throw "Invalid build, duplicate ID, or illegal perk order.";
+        if(!this.validBuild(b,defs) || b.id in seen) throw "Invalid build or duplicate ID.";
         seen[b.id]<-true;put(b.id);put(b.label);
         local weights=this.buildWeights(b);
         foreach(k in this.Stats) {put(k in b.targets ? b.targets[k] : "");put(k in b.preferred ? b.preferred[k] : "");put(weights[k]);}

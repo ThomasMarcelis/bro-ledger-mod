@@ -173,6 +173,8 @@ cases.free_order_and_over_budget_builds_roundtrip <- function() {
 cases.save_problems_name_their_cause <- function() {
     local ok=userBuild();
     check(B.buildProblems(ok,defs).len()==0,"valid build reported a problem");
+    local unweighted=B.copy(ok);if("weights" in unweighted) delete unweighted.weights;
+    check(B.validBuild(unweighted,defs) && B.buildProblems(unweighted,defs).len()==0,"optional weights broke the save diagnostics");
     local named=function(b,needle,why) {
         local problems=B.buildProblems(b,defs);
         check(problems.len()>0,why+" produced no problem");
