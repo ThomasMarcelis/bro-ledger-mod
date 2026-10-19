@@ -22,7 +22,7 @@ The player loop is: open a brother → Evaluate → create/import and compare co
 - Scale the work to the change. Small settings and visibility changes should use the existing implementation path and a focused validation pass. Touching Squirrel, JavaScript, and tests does not by itself make a change substantial.
 - Stop when the requested behavior works, appropriate checks pass, and no concrete issue remains. Reuse available tooling. Do not rebuild toolchains, repeat full suites, expand test matrices, or create extra packages and evidence artifacts merely for reassurance. Additional work needs a specific unresolved risk, failure, material change, or explicit applicable requirement; available time is not a reason to keep going.
 - Avoid tests for static copy, CSS, or DOM structure. Do not retain historical suites as release gates when they duplicate stronger behavior checks.
-- Reserve three independent final-diff reviews in parallel for substantial behavioral or architectural changes: correctness/architecture, simplicity/ownership, and changed-line value. Resolve material findings, subtract unnecessary work, and rerun proportionate checks. Small settings/visibility changes and documentation-only work do not require this ceremony.
+- Use one independent final-diff review for substantial behavioral or architectural changes, covering correctness, simplicity and changed-line value. Resolve material findings, subtract unnecessary work, and rerun proportionate checks. Small settings/visibility changes and documentation-only work do not need it.
 - Keep maintained docs small. Store temporary status, plans, questions, evidence, tools, dependencies, saves, captures, and generated output only in ignored paths.
 
 ## UI
