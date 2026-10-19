@@ -23,4 +23,47 @@ cases.student_can_unlock_gifted_but_cannot_start_without_a_point <- function() {
     check(!B.route(p,s,defs).feasible && B.forPlan(s,p).giftRows==0,"Student borrowed an acquisition point");
 };
 
+cases.priority_route_uses_fillers_and_warns_over_budget <- function() {
+    local p={route=["perk.battle_forged","perk.berserk","perk.killing_frenzy","perk.indomitable","perk.fearsome"],flex=[]},s=fixture();
+    check(B.picksNeeded(["perk.killing_frenzy"],defs,0)==7 && B.picksNeeded(["perk.killing_frenzy"],defs,6)==1,"single high-tier pick count changed");
+    local r=B.route(p,s,defs);
+    check(r.feasible && r.needed==10 && r.points==10 && r.filler==5,"five core perks did not account for filler picks");
+    check(r.blocked.len()==0 && r.next==null && same(r.remaining,p.route),"filler traversal blocked, changed priority or offered a locked next perk");
+    s.spent=3;s.futurePerks=6;r=B.route(p,s,defs);
+    check(r.feasible && r.needed==7 && r.filler==2,"learned picks did not lower filler count");
+    s=fixture();p.route.push("perk.duelist");r=B.route(p,s,defs);
+    check(!r.feasible && r.needed==11 && r.points==10 && r.blocked.len()==0,"six core perks hid their point deficit");
+};
+cases.student_budget_is_independent_of_optional_order <- function() {
+    local s=fixture();s.spent=5;s.free=1;s.futurePerks=0;
+    local p={route=["perk.killing_frenzy","perk.student"],flex=["perk.student"]},r=B.route(p,s,defs);
+    check(r.feasible && r.needed==2 && r.points==2 && r.studentRefund,"flexible Student did not fund a Manhunter's mandatory pick");
+    s.spent=9;p.route=["perk.student","perk.killing_frenzy","perk.fearsome"];r=B.route(p,s,defs);
+    check(!r.feasible && r.needed==3 && r.points==2,"flexible Student supplied two points without costing its own pick");
+    s.spent=5;p.route=["perk.colossus","perk.student","perk.killing_frenzy"];p.flex=["perk.colossus"];r=B.route(p,s,defs);
+    check(r.feasible && r.needed==2 && r.points==2,"earlier flexible pick suppressed Student's refund");
+    s.free=0;r=B.route(p,s,defs);
+    check(!r.feasible && r.points==0 && !r.studentRefund,"Student borrowed an unavailable acquisition point");
+    s.perks["perk.student"]<-true;s.spent++;s.futurePerks=1;r=B.route(p,s,defs);
+    check(r.feasible && r.needed==1 && r.points==1 && !r.studentRefund,"owned Student's pending refund counted twice");
+};
+cases.unavailable_perks_and_unknown_points_stay_infeasible <- function() {
+    local s=fixture(),p={route=["perk.unknown","perk.killing_frenzy"],flex=[]},r=B.route(p,s,defs);
+    check(!r.feasible && same(r.blocked,["perk.unknown"]) && same(r.unknown,r.blocked) && same(r.remaining,["perk.killing_frenzy"]),"unknown perk did not terminate separately from filler traversal");
+    p.route=["perk.killing_frenzy"];
+    foreach(field in ["free","futurePerks","spent"]) {
+        s=fixture();s[field]=-1;r=B.route(p,s,defs);
+        check(!r.pointsKnown && !r.feasible && r.next==null,"unknown points supplied a feasible route");
+    }
+};
+cases.manual_filler_keeps_mandatory_perks_and_saved_intent <- function() {
+    local b=userBuild();b.route=["perk.killing_frenzy","perk.gifted"];b.flex=["perk.gifted"];
+    local p=B.makePlan(b),saved=B.copy(p),s=fixture(),before=B.route(B.guidancePlan(p,s),s,defs);
+    s.perks["perk.colossus"]<-true;s.spent=1;s.futurePerks=8;
+    local guidance=B.guidancePlan(p,s),after=B.route(guidance,s,defs);
+    check(before.filler==6 && after.filler==5,"learned off-route filler did not lower the count");
+    check(same(guidance.route,["perk.killing_frenzy","perk.colossus"]) && same(after.acquired,["perk.colossus"]),"manual filler displaced a mandatory perk or failed to replace flex");
+    check(same(p,saved),"manual guidance changed the saved plan");
+};
+
 return cases;

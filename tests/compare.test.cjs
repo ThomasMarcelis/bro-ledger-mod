@@ -197,6 +197,50 @@ test('hovering a perk describes it, and the counter separates mandatory from fle
     assert.match(counter(),/1 flexible/);
 });
 
+test('free-order counts fillers, warns over budget and relayouts Flexible changes while saving the draft',()=>{
+    const s=fixture(0),ids=['perk.battle_forged','perk.berserk','perk.killing_frenzy','perk.indomitable','perk.fearsome','perk.duelist'];
+    s.data.defs=Object.fromEntries(ids.map((id,i)=>[id,{name:id,unlock:i<2?5:6,row:i<2?5:6,column:i}]));
+    click(s.button('Create build'));
+    const choices=s.byClass('bl-perk-choice'),header=s.byClass('bl-order-header')[0],counter=header.children[1];
+    choices.slice(0,5).forEach(click);
+    assert.equal(counter.text(),'5 mandatory / 0 flexible · 5 filler picks · needs 10 of 10 picks');
+    assert.equal(counter.classes.has('bl-warning'),false);
+    assert.ok(s.byClass('bl-edit-perk').every(n=>!n.classes.has('bl-target-impossible')));
+    assert.equal(s.byClass('bl-edit-perk')[0].attr('title'),'Needs 5 earlier picks; any perks can fill them.');
+    click(choices[5]);
+    assert.match(counter.text(),/6 mandatory \/ 0 flexible · 5 filler picks · needs 11 picks, budget 10 \(Student as mandatory adds 1\)/);
+    assert.equal(counter.classes.has('bl-warning'),true);
+    const flex=s.byClass('bl-edit-perk')[5].children[1].children[2].children[0],host=s.byClass('bl-order-list-host')[0];
+    header.outerHeight=()=>92;flex.prop('checked',true).trigger('ifChecked');
+    assert.equal(host.styles.top,92);assert.equal(counter.classes.has('bl-warning'),false);
+    assert.equal(counter.text(),'5 mandatory / 1 flexible · 5 filler picks · needs 10 of 10 picks');
+    header.outerHeight=()=>140;flex.prop('checked',false).trigger('ifUnchecked');
+    assert.equal(host.styles.top,140);assert.equal(counter.classes.has('bl-warning'),true);
+    assert.equal(s.button('Save build').disabled,false);click(s.button('Save build'));
+    assert.equal(s.calls[0].request.action,'saveBuild');assert.deepEqual(s.calls[0].request.definition.route,ids);
+});
+test('editor counts flexible Student once and marks only unavailable perks red',()=>{
+    const s=fixture(1),b=s.data.library[0];
+    s.data.defs['perk.killing_frenzy']={name:'Killing Frenzy',unlock:6,row:6,column:0};
+    b.route=['perk.killing_frenzy','perk.student','perk.unknown'];b.flex=['perk.student'];
+    s.owner.editor(s.data,b);
+    assert.equal(s.byClass('bl-order-header')[0].children[1].text(),'2 mandatory / 1 flexible · 5 filler picks · needs 7 of 11 picks');
+    const rows=s.byClass('bl-edit-perk');
+    assert.deepEqual(rows.map(n=>n.classes.has('bl-target-impossible')),[false,false,true]);
+    assert.equal(rows[2].attr('title'),'Perk unavailable.');
+});
+test('perk guidance distinguishes budget deficits from unavailable perks and unknown points',()=>{
+    const s=fixture(1),build=s.data.builds[0];
+    Object.assign(build.route,{feasible:false,pointsKnown:true,needed:11,points:10,filler:5});
+    click(s.byClass('bl-build-row')[0]);
+    assert.equal(s.byClass('bl-route-status')[0].text(),'Over budget: mandatory perks need 11 picks; 10 left.');
+    assert.ok(s.all().some(n=>n.value==='5 filler picks needed: any perks, flexible ones count.'));
+    for(const change of [{pointsKnown:false},{pointsKnown:true,unknown:['perk.unknown']}]){
+        Object.assign(build.route,change);s.owner.compare(s.data);click(s.byClass('bl-build-row')[0]);
+        assert.equal(s.byClass('bl-route-status')[0].text(),'Route blocked: unavailable perks or unknown points.');
+    }
+});
+
 test('native order list survives edits, contains wheel events and disposes resize callbacks',()=>{
     const s=fixture(1);s.owner.editor(s.data,s.data.library[0]);
     const list=s.byClass('bl-order-scroll')[0],viewport=list.aciScrollBar('container');

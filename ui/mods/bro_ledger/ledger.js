@@ -181,7 +181,10 @@ var BroLedgerUI = (function () {
             if (plan.route.acquired.indexOf(id) !== -1) row.addClass('bl-target-met');
             else if (plan.flex.indexOf(id) !== -1) row.addClass('bl-flex-text');
         });
-        if (!plan.route.feasible) text(parent, 'Route blocked: unlocks, spent points or missing perks.').addClass('bl-warning bl-route-status');
+        if (plan.route.filler > 0) text(parent, plan.route.filler+' filler pick'+(plan.route.filler===1?'':'s')+' needed: any perks, flexible ones count.');
+        if (!plan.route.feasible) text(parent, plan.route.pointsKnown && plan.route.unknown.length===0 && plan.route.needed>plan.route.points ?
+            'Over budget: mandatory perks need '+plan.route.needed+' picks; '+plan.route.points+' left.' :
+            'Route blocked: unavailable perks or unknown points.').addClass('bl-warning bl-route-status');
     };
     // Learned perks only: an absent perk has no line, so the sheet stays quiet for brothers without them.
     Controller.prototype.effects = function (parent, effects) {
@@ -426,7 +429,7 @@ var BroLedgerUI = (function () {
         }
         var header=$('<div class="bl-order-header"/>').appendTo(right);
         text(header,'Perk order',true);var count=text(header,'');
-        text(header,'A flexible pick can yield to an off-route perk you learn manually.');
+        text(header,'Order is your priority. Skip earlier tiers freely: filler picks can be any perk. Flexible picks yield to perks you learn manually.');
         var listHost=$('<div class="bl-order-list-host"/>').appendTo(right);
         // 8px per notch made a 20-perk list take ~47 wheel notches to cross; one row per notch.
         var list=listHost.createList(56,'bl-scroll bl-order-scroll',true),order=list.findListScrollContainer().addClass('bl-edit-route');
@@ -446,14 +449,19 @@ var BroLedgerUI = (function () {
         function tiny(parent,label,title,action){return $('<button type="button" class="bl-small"/>').text(label).attr('title',title).on('click',action).appendTo(parent);}
         var routeVersion=0;
         function updateCount(){
-            var mandatory=b.route.filter(function(id){return b.flex.indexOf(id)===-1;}).length;
-            var cap=b.route.indexOf('perk.student')!==-1&&b.flex.indexOf('perk.student')===-1?MANDATORY_LIMIT:MANDATORY_LIMIT-1;
-            count.text(mandatory+' mandatory / '+(b.route.length-mandatory)+' flexible · at most '+cap+' mandatory')
-                .toggleClass('bl-warning',mandatory>cap);
+            var ids=b.route.filter(function(id){return b.flex.indexOf(id)===-1;}),mandatory=ids.length;
+            var student=b.route.indexOf('perk.student')!==-1,budget=MANDATORY_LIMIT-1+(student?1:0);
+            if(student&&ids.indexOf('perk.student')===-1)ids.push('perk.student');
+            var unlocks=ids.filter(function(id){return !!data.defs[id];}).map(function(id){return data.defs[id].unlock;}).sort(function(a,c){return a-c;}),needed=unlocks.length;
+            unlocks.forEach(function(unlock,k){needed=Math.max(needed,unlock+unlocks.length-k);});
+            count.text(mandatory+' mandatory / '+(b.route.length-mandatory)+' flexible · '+(needed-unlocks.length)+' filler picks · '+
+                (needed>budget?'needs '+needed+' picks, budget '+budget+(student?'':' (Student as mandatory adds 1)'):'needs '+needed+' of '+budget+' picks'))
+                .toggleClass('bl-warning',needed>budget);
+            layoutOrder();
         }
         function drawRoute(revealID,direction){
             var version=++routeVersion,scrollTop=viewport.scrollTop(),reveal=null,focus=null;
-            disposeCheckboxes(order);order.empty();updateCount();
+            disposeCheckboxes(order);order.empty();
             b.route.forEach(function(id,i){
                 var row=$('<div class="bl-edit-perk text-font-normal"/>').attr('data-perk',id).appendTo(order);
                 $('<span/>').text((i+1)+'. '+perkName(id,data.defs)).appendTo(row);
@@ -465,14 +473,15 @@ var BroLedgerUI = (function () {
                     var at=b.flex.indexOf(id);if(checked&&at===-1)b.flex.push(id);else if(!checked&&at!==-1)b.flex.splice(at,1);
                     // Only the tally changes; redrawing here would destroy the iCheck box mid-event.
                     updateCount();});
-                if(!data.defs[id]||data.defs[id].unlock>i)row.addClass('bl-target-impossible').attr('title',!data.defs[id]?'Perk unavailable.':'Requires '+data.defs[id].unlock+' earlier picks. Reorder or add earlier-tier perks.');
+                if(!data.defs[id])row.addClass('bl-target-impossible').attr('title','Perk unavailable.');
+                else if(data.defs[id].unlock>i)row.attr('title','Needs '+data.defs[id].unlock+' earlier picks; any perks can fill them.');
                 if(id===revealID){reveal=row;if(direction)focus=direction==='up'?(i>0?up:down):(i<b.route.length-1?down:up);}
             });
             tree.find('.bl-perk-choice').each(function(){
                 var selected=b.route.indexOf($(this).attr('data-perk'))!==-1;
                 $(this).toggleClass('is-selected',selected).attr('aria-pressed',selected);
             });
-            layoutOrder();list.trigger('scroll',{top:scrollTop});
+            updateCount();list.trigger('scroll',{top:scrollTop});
             if(reveal)revealRow(reveal);
             if(focus)focus.focus();
         }

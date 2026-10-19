@@ -7,7 +7,7 @@ cases.empty_library_and_roundtrip <- function() {
 cases.reject_invalid_data <- function() {
     local b=userBuild();check(B.validBuild(b,defs),"valid multi-tag board rejected");
     foreach(edit in [function(x){x.targets.matk=0.0/0.0;},function(x){x.preferred.matk=59;},
-        function(x){x.route=["perk.nimble"];x.flex=[];},function(x){x.flex=["perk.nine_lives"];},
+        function(x){x.route=["perk.unknown"];x.flex=[];},function(x){x.flex=["perk.nine_lives"];},
         function(x){x.route.push(x.route[0]);},function(x){x.weaponTags.push("Laser");},
         function(x){x.extra<-true;},function(x){x.label="";}]) {
         local bad=B.copy(b);edit(bad);check(!B.validBuild(bad,defs),"invalid build accepted");
@@ -138,11 +138,10 @@ cases.full_student_route_and_empty_perks <- function() {
         "perk.reach_advantage","perk.battle_forged","perk.underdog","perk.killing_frenzy","perk.berserk","perk.fearsome"];
     b.flex=[];check(B.validBuild(b,defs),"legal full mandatory route rejected");
     local delayed=B.copy(b);delayed.route.remove(0);delayed.route.push("perk.student");
-    check(!B.validBuild(delayed,defs),"Student borrowed its own eleventh acquisition point");
-    // Student last is legal once it is flexible: it is an alternate, not the eleventh commitment.
+    check(B.validBuild(delayed,defs) && B.buildProblems(delayed,defs).len()==0,"Student last blocked a save");
     local flexible=B.copy(delayed);flexible.flex=["perk.student"];
     check(B.validBuild(flexible,defs),"flexible Student in the last position rejected");
-    b.route[0]="perk.pathfinder";check(!B.validBuild(b,defs),"11 mandatory non-Student perks accepted");
+    b.route[0]="perk.pathfinder";check(B.validBuild(b,defs),"11 mandatory non-Student perks blocked a save");
     // Hélder's case: 10 mandatory perks plus several flexible alternates on top.
     local wide=userBuild();
     wide.route=["perk.colossus","perk.gifted","perk.fortified_mind","perk.mastery.hammer","perk.reach_advantage",
@@ -152,11 +151,23 @@ cases.full_student_route_and_empty_perks <- function() {
     check(B.validBuild(wide,defs),"10 mandatory plus 4 flexible perks rejected");
     check(same(B.decodeBuilds(B.encodeBuilds([wide],defs),defs)[0],wide),"wide build lost data in share roundtrip");
     local overCommitted=B.copy(wide);overCommitted.flex=["perk.dodge"];
-    check(!B.validBuild(overCommitted,defs),"13 mandatory perks accepted");
+    check(B.validBuild(overCommitted,defs),"13 mandatory perks blocked a save");
     local tooMany=userBuild();tooMany.route=[];tooMany.flex=[];
-    for(local i=0;i<B.RouteLimit+1;i++) tooMany.route.push("perk.slot_"+i);
-    check(!B.validBuild(tooMany,defs),"route beyond the list limit accepted");
+    foreach(id,_ in defs) {tooMany.route.push(id);if(tooMany.route.len()>B.RouteLimit) break;}
+    check(!B.validBuild(tooMany,defs) && B.joinProblems(B.buildProblems(tooMany,defs)).find("at most 20")!=null,"route beyond the list limit accepted");
     b.route=[];b.flex=[];check(B.validBuild(b,defs),"deliberately empty route rejected");
+};
+cases.free_order_and_over_budget_builds_roundtrip <- function() {
+    local b=userBuild();b.flex=[];
+    b.route=["perk.battle_forged","perk.berserk","perk.killing_frenzy","perk.indomitable","perk.fearsome"];
+    local six=B.copy(b);six.route.push("perk.duelist");
+    local twelve=B.copy(six);
+    foreach(id in ["perk.colossus","perk.gifted","perk.dodge","perk.fortified_mind","perk.underdog","perk.pathfinder"]) twelve.route.push(id);
+    foreach(build in [b,six,twelve]) {
+        check(B.validBuild(build,defs) && B.buildProblems(build,defs).len()==0,"free-order or over-budget build blocked a save");
+        check(same(B.decodeBuilds(B.encodeBuilds([build],defs),defs)[0],build),"relaxed build lost data in BL2 roundtrip");
+        check(B.validPlan(B.makePlan(build)),"relaxed build could not become a tracked plan");
+    }
 };
 // Hélder could not tell why a save was refused. Each cause must name itself.
 cases.save_problems_name_their_cause <- function() {
@@ -177,9 +188,9 @@ cases.save_problems_name_their_cause <- function() {
     named(textWeight,"Weight","non-numeric weight");
     // A missing Ideal beside a Minimum is a real cause and must say so.
     local lonely=userBuild();lonely.preferred={};named(lonely,"Ideal","minimum without an ideal");
-    local over=userBuild();over.route=[];over.flex=[];
-    for(local i=0;i<12;i++) over.route.push("perk.slot_"+i);
-    named(over,"mandatory","12 mandatory perks");
+    local unknown=userBuild();unknown.route.push("perk.unknown");
+    check(!B.validBuild(unknown,defs),"unknown perk accepted");
+    named(unknown,"perk.unknown is not available","unavailable perk");
     local badTarget=userBuild();badTarget.targets.matk=501;named(badTarget,"0-500","out-of-range target");
     // A zero weight must be as acceptable as an omitted one: ignoring a stat is not an error.
     local ignored=userBuild();ignored.weights.rdef=0;ignored.weights.ratk=0;

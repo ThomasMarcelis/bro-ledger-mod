@@ -1,13 +1,20 @@
 // Inert definitions owned by the player, not by one campaign. Built-in templates stay outside this store.
 ::BroLedger.LibraryLimit <- 32;
-// A brother can spend at most 10 points, or 11 when Student refunds one. Mandatory picks obey that
-// budget. Flexible picks are alternates that yield to off-route perks, so they sit on top of it.
+// A brother can spend at most 10 points, or 11 when Student refunds one. This budget is advisory.
 ::BroLedger.MandatoryLimit <- 11;
 ::BroLedger.RouteLimit <- 20;
 ::BroLedger.ShareLimit <- 48000;
 ::BroLedger.WeaponTags <- ["Shield","Spear","Sword","Hammer","Axe","Mace","Flail","Cleaver","Whip","Dagger","Polearm","Bow","Crossbow","Throwing","Handgonne","Net","Two-handed","Light armour","Heavy armour"];
 ::BroLedger.PlaystyleTags <- ["Frontline","Backline","Tank","Damage","Control","Support","Hybrid","Duelist","Ranged","Mobile"];
 
+::BroLedger.picksNeeded <- function(ids, defs, spent)
+{
+    local unlocks=[],n=ids.len(),needed=n;
+    foreach(id in ids) unlocks.push(defs[id].unlock);
+    unlocks.sort();
+    foreach(k,unlock in unlocks) needed=::Math.max(needed,unlock-spent+n-k);
+    return needed;
+};
 ::BroLedger.validUTF8 <- function(value)
 {
     for(local i=0;i<value.len();i++) {
@@ -80,26 +87,17 @@
             out.push("Every attribute with an Ideal needs a Minimum, and the reverse.");
     }
     if(typeof b.route!="array" || typeof b.flex!="array") return out.len()>0 ? out : ["Perk selection is not a valid list."];
-    local mandatory=[];
-    foreach(id in b.route) if(b.flex.find(id)==null) mandatory.push(id);
-    local cap=b.route.find("perk.student")!=null && b.flex.find("perk.student")==null ? this.MandatoryLimit : this.MandatoryLimit-1;
-    if(mandatory.len()>cap)
-        out.push("Too many mandatory perks: "+mandatory.len()+" chosen, at most "+cap+" fit in a brother's perk points"+
-            (cap==this.MandatoryLimit-1 ? " (11 with Student)" : "")+". Mark extras as Flexible or remove them.");
     if(b.route.len()>this.RouteLimit)
         out.push("Too many perks in total: "+b.route.len()+"; the list holds at most "+this.RouteLimit+" including flexible ones.");
     if(!this.uniqueStrings(b.route,this.RouteLimit)) out.push("The same perk is listed more than once.");
     if(!this.uniqueStrings(b.flex,this.RouteLimit)) out.push("The same flexible perk is marked more than once.");
     foreach(id in b.flex) if(b.route.find(id)==null) {out.push("A flexible perk is not in the perk list.");break;}
-    if(mandatory.len()==this.MandatoryLimit && mandatory[this.MandatoryLimit-1]=="perk.student")
-        out.push("Student cannot be the last mandatory perk; its refund cannot pay for itself.");
-    local late=[];
-    foreach(i,id in b.route) {
+    local unavailable=[];
+    foreach(id in b.route) {
         if(!this.validString(id,80) || id.len()<6 || id.slice(0,5)!="perk.") {out.push("The perk list contains an invalid entry.");break;}
-        if(defs!=null && !(id in defs)) late.push(id+" is not available");
-        else if(defs!=null && defs[id].unlock>i) late.push(this.perkLabel(id,defs)+" needs "+defs[id].unlock+" earlier picks but sits at position "+(i+1));
+        if(defs!=null && !(id in defs)) unavailable.push(id+" is not available");
     }
-    if(late.len()>0) out.push("Perk order: "+this.joinWords(late)+".");
+    if(unavailable.len()>0) out.push(this.joinWords(unavailable)+".");
     local badTag=[];
     if(typeof b.weaponTags!="array" || typeof b.playstyleTags!="array") out.push("Tags are not a valid list.");
     else {
@@ -127,10 +125,6 @@
 {
     local out="";foreach(i,v in values) out+=(i==0 ? "" : i==values.len()-1 ? " and " : ", ")+v;return out;
 };
-::BroLedger.perkLabel <- function(id, defs)
-{
-    return defs!=null && id in defs && this.plainName(defs[id].name,80) ? defs[id].name : id;
-};
 ::BroLedger.validBuild <- function(b, defs=null)
 {
     if(typeof b!="table" || b.len()!=("weights" in b ? 9 : 8)) return false;
@@ -145,16 +139,9 @@
         foreach(k in this.Stats) if(!(k in b.weights) || typeof b.weights[k]!="integer" || b.weights[k]<0 || b.weights[k]>10) return false;
     }
     foreach(id in b.flex) if(b.route.find(id)==null) return false;
-    // Mandatory picks must fit the point budget; flexible alternates may exceed it.
-    local mandatory=[];
-    foreach(id in b.route) if(b.flex.find(id)==null) mandatory.push(id);
-    local cap=b.route.find("perk.student")!=null && b.flex.find("perk.student")==null ? this.MandatoryLimit : this.MandatoryLimit-1;
-    if(mandatory.len()>cap || b.route.len()>this.RouteLimit) return false;
-    // The refund cannot fund Student itself.
-    if(mandatory.len()==this.MandatoryLimit && mandatory[this.MandatoryLimit-1]=="perk.student") return false;
-    foreach(i,id in b.route) {
+    foreach(id in b.route) {
         if(!this.validString(id,80) || id.len()<6 || id.slice(0,5)!="perk.") return false;
-        if(defs!=null && (!(id in defs) || defs[id].unlock>i)) return false;
+        if(defs!=null && !(id in defs)) return false;
     }
     foreach(tag in b.weaponTags) if(this.WeaponTags.find(tag)==null) return false;
     foreach(tag in b.playstyleTags) if(this.PlaystyleTags.find(tag)==null) return false;

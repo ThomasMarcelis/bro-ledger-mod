@@ -48,43 +48,46 @@
         else remaining.push(id);
     }
     // Flexible picks are alternates rather than commitments, so only mandatory ones must fit the budget.
-    local flex = this.planFlex(plan), mandatoryRemaining = 0;
-    foreach (id in remaining) if (flex.find(id) == null) mandatoryRemaining++;
+    local flex = this.planFlex(plan), mandatoryRemaining = [];
+    foreach (id in remaining) if (flex.find(id) == null && id in defs) mandatoryRemaining.push(id);
     foreach (id, _ in snapshot.perks)
         if (id != "perk.student" && plan.route.find(id) == null) offplan.push(id);
     local pointsKnown = snapshot.free >= 0 && snapshot.spent >= snapshot.perks.len() && snapshot.futurePerks >= 0;
     local order = [], spent = snapshot.spent, work = this.copy(remaining);
     local points = pointsKnown ? snapshot.free + snapshot.futurePerks : 0;
-    local refund = false;
     // An unowned Student costs a point before its single refund, even at the cap.
     // Owned Student's still-future refund is already in futurePerks.
-    local available = points;
+    local refund = points >= 1 && remaining.find("perk.student") != null && "perk.student" in defs;
+    if (refund) {
+        if (mandatoryRemaining.find("perk.student") == null) mandatoryRemaining.push("perk.student");
+        points++;
+    }
+    local needed = this.picksNeeded(mandatoryRemaining, defs, snapshot.spent);
     while (work.len() > 0)
     {
-        local found = null;
-        foreach (index, id in work)
-            if (id in defs && defs[id].unlock <= spent)
+        local found = null, known = false;
+        foreach (index, id in work) {
+            if (!(id in defs)) continue;
+            known = true;
+            if (defs[id].unlock <= spent)
             {
                 found = index;
                 break;
             }
-        if (found == null) break;
+        }
+        if (found == null) {
+            if (!known) break;
+            spent++;
+            continue;
+        }
         local id = work[found];
         order.push(id);
         work.remove(found);
         spent++;
-        if (available > 0)
-        {
-            available--;
-            if (id == "perk.student") { available++; points++; refund = true; }
-        }
-        else available--;
     }
     return {remaining = order, blocked = work, acquired = acquired, offplan = offplan, unknown = unknown,
         pointsKnown = pointsKnown, points = points, studentRefund = refund,
-        // Mandatory picks must fit the point budget. Flexible picks are alternates: a build stays
-        // feasible when they do not all fit, so a 10-mandatory build may list extra flexible options.
-        feasible = pointsKnown && unknown.len() == 0 && work.len() == 0 &&
-            mandatoryRemaining <= points,
+        needed = needed, filler = ::Math.max(0, needed - mandatoryRemaining.len()),
+        feasible = pointsKnown && unknown.len() == 0 && needed <= points,
         next = pointsKnown && snapshot.free > 0 && order.len() > 0 && defs[order[0]].unlock <= snapshot.spent ? order[0] : null};
 };
