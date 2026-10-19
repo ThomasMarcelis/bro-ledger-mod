@@ -2,7 +2,7 @@
 
 Plan a brother's perks and stats in-game, see how well a build fits them, then get guided on which perks and level-ups to pick. Comes with 10 starter builds and lets you copy/paste builds with other players as text.
 
-[Nexus Mods](https://www.nexusmods.com/battlebrothers/mods/1188) · [GitHub](https://github.com/ThomasMarcelis/bro-ledger-mod) · [MIT](LICENSE)
+Download from [Nexus Mods](https://www.nexusmods.com/battlebrothers/mods/1188) or [GitHub](https://github.com/ThomasMarcelis/bro-ledger-mod). Licensed under [MIT](LICENSE).
 
 The mod only advises. It never spends points, equips items, or changes your brothers.
 

@@ -171,7 +171,7 @@ var BroLedgerUI = (function () {
         text(parent, 'To L' + build.projection.horizon + ': ' + joint).addClass('bl-bound');
     };
     Controller.prototype.perkOrder = function (parent, plan, defs, compact) {
-        text(parent, 'Creator order · blue = flex', true);
+        text(parent, 'Creator order (blue = flexible)', true);
         var route = $('<div class="bl-route-list"/>').toggleClass('bl-compact-route', !!compact).appendTo(parent);
         (plan.order || []).forEach(function (id, i) {
             var row = $('<div class="bl-route-item text-font-normal"/>').appendTo(route);
@@ -274,7 +274,7 @@ var BroLedgerUI = (function () {
         var hasStarters = data.starters && data.starters.length > 0;
         var body = $('<div class="bl-compare-body"/>').appendTo(popup.findPopupDialogContentContainer());
         var context = $('<div class="bl-compare-context"/>').appendTo(body);
-        text(context, data.name + (hasStarters ? ' · Builds and starter templates' : ' · My builds'), true);
+        text(context, data.name + (hasStarters ? ': builds and starter templates' : ': my builds'), true);
         tooltip(text(context, 'Goal gap: lower is closer. One allocation at average rolls.'), 'potential');
         var tools = $('<div class="bl-toolbar"/>').appendTo(context);
         button(tools, 'Create build', function () { if (self.current(data,popup)) self.editor(data,null); });
@@ -322,7 +322,7 @@ var BroLedgerUI = (function () {
             if (!self.current(data,popup) || !matches(build,weapon,style,source)) return;
             selected=build; disposeTooltips(details); details.empty();
             list.find('.bl-build-row').removeClass('is-selected').filter(function () {return $(this).attr('data-build')===build.id && $(this).attr('data-source')===build.source;}).addClass('is-selected');
-            text(details,build.label + ' · ' + scoreLabel(build),true);
+            text(details,build.label + ' (' + scoreLabel(build) + ')',true);
             if(build.source==='starter') text(details,'Starter builds are original examples of common community archetypes. They may be suboptimal; use them as starting guides and adjust them to your brothers and playstyle.').addClass('bl-starter-notice');
             self.targets(details,build,data.stars,false); self.perkOrder(details,build,data.defs,false);
             var actions=$('<div class="bl-toolbar"/>').appendTo(details);
@@ -401,7 +401,7 @@ var BroLedgerUI = (function () {
                 .val(b.weights[k]===undefined?1:b.weights[k]).appendTo($('<td/>').appendTo(row));inputs[k].push(weight);
             function ignored(){var w=weight.val().trim();
                 var off=w==='0'||w===''||(inputs[k][0].val().trim()===''&&inputs[k][1].val().trim()==='');
-                row.toggleClass('bl-ignored',off);label.text(names[k]+(off?' · Ignored':''));}
+                row.toggleClass('bl-ignored',off);label.text(names[k]+(off?' (ignored)':''));}
             inputs[k].forEach(function(input){input.on('input change',ignored);});ignored();
         });
         function tags(parent,label,values,key){
@@ -414,7 +414,7 @@ var BroLedgerUI = (function () {
             });
         }
         tags(left,'Playstyle',data.playstyleTags,'playstyleTags');
-        text(middle,'Perks · click to add / remove',true);
+        text(middle,'Perks: click to add or remove',true);
         var tree=$('<div class="bl-perk-tree"/>').appendTo(middle);
         // A real element, because a native title attribute is not a reliable hover surface here.
         var describe=$('<div class="bl-perk-description text-font-normal"/>').appendTo(middle);
@@ -424,7 +424,7 @@ var BroLedgerUI = (function () {
         describeBody.text(describeDefault);
         function showPerk(def){
             if(!def){describeTitle.text('');describeBody.text(describeDefault);return;}
-            describeTitle.text(def.name+' · '+def.unlock+' earlier picks');
+            describeTitle.text(def.name+' (needs '+def.unlock+' earlier picks)');
             describeBody.text(def.description||'No description available.');
         }
         var header=$('<div class="bl-order-header"/>').appendTo(right);
@@ -454,8 +454,9 @@ var BroLedgerUI = (function () {
             if(student&&ids.indexOf('perk.student')===-1)ids.push('perk.student');
             var unlocks=ids.filter(function(id){return !!data.defs[id];}).map(function(id){return data.defs[id].unlock;}).sort(function(a,c){return a-c;}),needed=unlocks.length;
             unlocks.forEach(function(unlock,k){needed=Math.max(needed,unlock+unlocks.length-k);});
-            count.text(mandatory+' mandatory / '+(b.route.length-mandatory)+' flexible · '+(needed-unlocks.length)+' filler picks · '+
-                (needed>budget?'needs '+needed+' picks, budget '+budget+(student?'':' (Student as mandatory adds 1)'):'needs '+needed+' of '+budget+' picks'))
+            var filler=needed-unlocks.length;
+            count.text(mandatory+' mandatory, '+(b.route.length-mandatory)+' flexible, '+filler+' filler pick'+(filler===1?'':'s')+'. '+
+                (needed>budget?'Needs '+needed+' picks, budget '+budget+(student?'.':' (Student as mandatory adds 1).'):'Needs '+needed+' of '+budget+' picks.'))
                 .toggleClass('bl-warning',needed>budget);
             layoutOrder();
         }
@@ -491,7 +492,7 @@ var BroLedgerUI = (function () {
             if(tier!==def.row){tier=def.row;treeRow=$('<div class="bl-perk-tier"/>').appendTo(tree);}
             var node=$('<button type="button" class="bl-perk-choice"/>').attr('data-perk',id).attr('aria-label',def.name).appendTo(treeRow);
             // The native tree's own description, so hovering explains the perk before you pick it.
-            node.attr('title',def.name+' · '+def.unlock+' earlier picks'+(def.description?'\n\n'+def.description:''));
+            node.attr('title',def.name+' (needs '+def.unlock+' earlier picks)'+(def.description?'\n\n'+def.description:''));
             if(def.icon)$('<img/>').attr('src',Path.GFX+def.icon).attr('alt',def.name).appendTo(node);else node.text(def.name);
             node.on('mouseenter focus',function(){showPerk(def);}).on('mouseleave blur',function(){showPerk(null);});
             node.on('click',function(){if(!self.current(data,popup))return;var at=b.route.indexOf(id),added=at===-1;if(added){if(b.route.length>=ROUTE_LIMIT){self.showError('The perk list holds at most '+ROUTE_LIMIT+' perks. Remove one first.');return;}b.route.push(id);}else{b.route.splice(at,1);at=b.flex.indexOf(id);if(at!==-1)b.flex.splice(at,1);}drawRoute(added?id:null);});
@@ -554,7 +555,7 @@ var BroLedgerUI = (function () {
         }
         text($('<div class="bl-offer"/>').appendTo(content), data.offer.label + ': ' + data.offer.picks.map(function (k) {
             return names[k] + ' +' + data.offer.values[k];
-        }).join(' · ') + '. ' + data.offer.reason);
+        }).join(', ') + '. ' + data.offer.reason);
         this.markOfferRows(data.offer.picks);
     };
     Controller.prototype.markOfferRows = function (picks) {

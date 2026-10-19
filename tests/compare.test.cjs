@@ -203,16 +203,16 @@ test('free-order counts fillers, warns over budget and relayouts Flexible change
     click(s.button('Create build'));
     const choices=s.byClass('bl-perk-choice'),header=s.byClass('bl-order-header')[0],counter=header.children[1];
     choices.slice(0,5).forEach(click);
-    assert.equal(counter.text(),'5 mandatory / 0 flexible · 5 filler picks · needs 10 of 10 picks');
+    assert.equal(counter.text(),'5 mandatory, 0 flexible, 5 filler picks. Needs 10 of 10 picks.');
     assert.equal(counter.classes.has('bl-warning'),false);
     assert.ok(s.byClass('bl-edit-perk').every(n=>!n.classes.has('bl-target-impossible')));
     click(choices[5]);
-    assert.match(counter.text(),/6 mandatory \/ 0 flexible · 5 filler picks · needs 11 picks, budget 10 \(Student as mandatory adds 1\)/);
+    assert.equal(counter.text(),'6 mandatory, 0 flexible, 5 filler picks. Needs 11 picks, budget 10 (Student as mandatory adds 1).');
     assert.equal(counter.classes.has('bl-warning'),true);
     const flex=s.byClass('bl-edit-perk')[5].children[1].children[2].children[0],host=s.byClass('bl-order-list-host')[0];
     header.outerHeight=()=>92;flex.prop('checked',true).trigger('ifChecked');
     assert.equal(host.styles.top,92);assert.equal(counter.classes.has('bl-warning'),false);
-    assert.equal(counter.text(),'5 mandatory / 1 flexible · 5 filler picks · needs 10 of 10 picks');
+    assert.equal(counter.text(),'5 mandatory, 1 flexible, 5 filler picks. Needs 10 of 10 picks.');
     header.outerHeight=()=>140;flex.prop('checked',false).trigger('ifUnchecked');
     assert.equal(host.styles.top,140);assert.equal(counter.classes.has('bl-warning'),true);
     assert.equal(s.button('Save build').disabled,false);click(s.button('Save build'));
@@ -223,7 +223,7 @@ test('editor counts flexible Student once and marks only unavailable perks red',
     s.data.defs['perk.killing_frenzy']={name:'Killing Frenzy',unlock:6,row:6,column:0};
     b.route=['perk.killing_frenzy','perk.student','perk.unknown'];b.flex=['perk.student'];
     s.owner.editor(s.data,b);
-    assert.equal(s.byClass('bl-order-header')[0].children[1].text(),'2 mandatory / 1 flexible · 5 filler picks · needs 7 of 11 picks');
+    assert.equal(s.byClass('bl-order-header')[0].children[1].text(),'2 mandatory, 1 flexible, 5 filler picks. Needs 7 of 11 picks.');
     const rows=s.byClass('bl-edit-perk');
     assert.deepEqual(rows.map(n=>n.classes.has('bl-target-impossible')),[false,false,true]);
 });
@@ -292,7 +292,7 @@ test('source order wins over names, unlocks and object order; clean-sheet clicks
     const choices=s.byClass('bl-perk-choice');
     assert.deepEqual(choices.map(n=>n.attr('data-perk')),ids);
     assert.equal(choices[0].attr('aria-label'),'Pick 22');
-    assert.equal(choices[0].attr('title'),'Pick 22 · 21 earlier picks');
+    assert.equal(choices[0].attr('title'),'Pick 22 (needs 21 earlier picks)');
     // 20 fit; the 21st is refused because the list itself is full, not because of the perk budget.
     choices.slice(0,20).forEach(click);click(choices[20]);
     assert.equal(choices[20].attr('aria-pressed'),false);assert.equal(s.byClass('bl-error').length,1);
