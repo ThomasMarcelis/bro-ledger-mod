@@ -18,7 +18,7 @@ To remove, delete the ZIP. Your library and tracked plans are left in place for 
 
 **1.2.0 is an unverified prerelease.** Free perk order, Copy & edit, the pre-0.7 cleanup and 1.1.0's scoring redesign pass standalone checks. 1.1.0 also passed browser preflight at 1920×1080, 2560×1440, 1600×900 and 1280×800; 1.2.0's editor changes have not had a fresh rendered check. Neither verifies the game VM or real game transport; in-game player-loop and save/removal/reinstall validation remain pending. Earlier 1.0.1 live and Steam Deck layout evidence does not certify this version.
 
-**Scoring changed for all builds and saved plans.** Weights now value progress in fixed ordinary-roll units toward Ideal; Minimum breaks exact ties instead of marking half satisfaction. Saved numbers and plans remain intact, but forecasts, advice and ranking can change. Review your tracked goals after upgrading. BL1/BL2 text remains readable; older mod versions score the same text differently.
+**Since 1.1.0, scoring uses Goal gap for all builds and saved plans.** Weights value progress in fixed ordinary-roll units toward Ideal; Minimum breaks exact ties instead of marking half satisfaction. Saved numbers and plans remain intact, but forecasts, advice and ranking can change. Review your tracked goals when upgrading from 1.0.x. BL1/BL2 text remains readable; versions before 1.1.0 score the same text differently.
 
 ## Use
 
@@ -34,7 +34,7 @@ Open a brother and select **Bro Planner**.
 
 **Share.** **Export** copies one build, or **Export my builds** for all, as text; Ctrl+C to copy. **Import** accepts BL2 text, and BL1 text from Bro Ledger 0.4, pasted or via **Paste clipboard**. Builds that skip tiers or exceed the point budget need 1.2+ to import. Duplicates are rejected unless you choose **Skip duplicates** or **Import copies**. Nothing goes over the network.
 
-**Library.** Up to 32 personal builds, stored with your MSU mod settings and shared across campaigns. Upgrading from before 0.7: first load each old campaign once with 1.1.0 so its builds move into the shared library (or export them as BL2 text from 1.1.0). Since 1.2, builds stored inside a campaign are no longer moved over, and plans tracked before 0.5 can't be read; those brothers show a notice to track a build again.
+**Library.** Up to 32 personal builds, stored with your MSU mod settings and shared across campaigns. Upgrading from before 0.7: with 1.1.0 installed, load each old campaign, open **Bro Planner** on any brother and check its builds now appear (or export them). 1.2 no longer reads builds stored inside a campaign. Plans tracked before 0.5 can't be read either; those brothers show a notice to track a build again.
 
 **Settings.** Mod Options toggles the planner, perk highlights and level-up advice. Turn off **Show starter builds** to compare only personal builds; copies and tracked plans are kept. Turn off **Show current perk effects** to hide the Dodge, Nimble and Battle Forged readouts. Both default to on. Reopen the sheet after changing settings. If a request fails, use **Retry**.
 
