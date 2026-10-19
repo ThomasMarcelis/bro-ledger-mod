@@ -173,7 +173,7 @@
     }
     return label;
 };
-// BL2 stores one integer weight after each Minimum/Ideal pair.
+// BL2 stores one integer weight after each Minimum/Ideal pair; BL1 is read but never written.
 ::BroLedger.encodeBuilds <- function(builds, defs=null)
 {
     if(typeof builds!="array" || builds.len()>this.LibraryLimit) throw "At most 32 builds are supported.";
@@ -193,11 +193,10 @@
 // Only explicit import supplies importInfo; saved-library reads remain strict.
 ::BroLedger.decodeBuilds <- function(source, defs=null, importInfo=null)
 {
-    if(typeof source=="string" && source.len()>=4 && source.slice(0,4)=="BL1|")
-        throw "BL1 text from Bro Ledger 0.4 is no longer supported. Ask for a BL2 export from Bro Planner 0.5 or later.";
-    if(typeof source!="string" || source.len()>this.ShareLimit || source.len()<4 || source.slice(0,4)!="BL2|")
-        throw "Unsupported share version or size. Expected BL2 text (up to 48,000 bytes).";
-    local at=4;
+    if(typeof source!="string" || source.len()>this.ShareLimit || source.len()<4 || ["BL1|","BL2|"].find(source.slice(0,4))==null)
+        throw "Unsupported share version or size. Expected BL1 or BL2 text (up to 48,000 bytes).";
+    // BL1 text shared by 0.4 stays importable; without weights, every attribute counts once.
+    local at=4,weighted=source.slice(0,4)=="BL2|";
     local integer=function(s,limit) {
         if(s.len()==0 || s.len()>5) throw "Invalid count.";
         local n=0;foreach(c in s) {if(c<48 || c>57) throw "Invalid count.";n=n*10+c-48;if(n>limit) throw "Count exceeds limit.";}return n;
@@ -224,12 +223,13 @@
     // Tag lists stay bounded by their own vocabularies; perk lists by the route limit.
     local listLimit=this.RouteLimit>this.WeaponTags.len() ? this.RouteLimit : this.WeaponTags.len();
     for(local i=0;i<count;i++) {
-        local b={id=take(),label=take(),targets={},preferred={},weights={},route=[],flex=[],weaponTags=[],playstyleTags=[]};
+        local b={id=take(),label=take(),targets={},preferred={},route=[],flex=[],weaponTags=[],playstyleTags=[]};
+        if(weighted) b.weights<-{};
         foreach(k in this.Stats) {
             local m=take(),ideal=take();
             if(m!="") b.targets[k]<-numeric(m);
             if(ideal!="") b.preferred[k]<-numeric(ideal);
-            b.weights[k]<-integer(take(),10);
+            if(weighted) b.weights[k]<-integer(take(),10);
         }
         foreach(values in [b.route,b.flex,b.weaponTags,b.playstyleTags]) {
             local n=integer(take(),listLimit);for(local j=0;j<n;j++) values.push(take());

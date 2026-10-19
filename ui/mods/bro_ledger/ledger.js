@@ -512,7 +512,7 @@ var BroLedgerUI = (function () {
     Controller.prototype.share = function(data, exported){
         var self=this,popup=this.dialog(exported===null?'Import builds':'Export builds');popup.addClass('bl-sharing');
         var body=$('<div class="bl-share-body"/>').appendTo(popup.findPopupDialogContentContainer());
-        text(body,exported===null?'Paste a single or bulk BL2 string. Imports apply together.':'Select text, then Ctrl+C. Paste into another campaign or share with a player.',true);
+        text(body,exported===null?'Paste a single or bulk BL1 or BL2 string. Imports apply together.':'Select text, then Ctrl+C. Paste into another campaign or share with a player.',true);
         text(body,'Your build library is shared across campaigns. Tracked plans stay with each brother.');
         var area=$('<textarea class="bl-share-text" spellcheck="false" maxlength="48000"/>').attr('aria-label','Build share text').val(exported||'').prop('readOnly',exported!==null).appendTo(body);
         if(exported===null)button(body,'Paste clipboard',function(){

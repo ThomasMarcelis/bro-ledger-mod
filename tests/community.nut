@@ -78,9 +78,14 @@ cases.library_ignores_old_campaign_flags <- function() {
         check(flags.get("BroLedger.Library")==raw && !flags.has("BroLedger.LibraryMoved"),"old campaign flags changed");
     }
 };
-cases.bl1_text_reports_retirement <- function() {
-    local error=null;try {B.decodeBuilds("BL1|1:0",defs);} catch(e) {error=e;}
-    check(error=="BL1 text from Bro Ledger 0.4 is no longer supported. Ask for a BL2 export from Bro Planner 0.5 or later.","BL1 rejection did not explain how to export supported text");
+cases.bl1_text_imports_with_equal_weights_and_exports_as_bl2 <- function() {
+    local put=function(v){local s=v.tostring();return s.len()+":"+s;},text="BL1|"+put(1)+put("old_one")+put("Old build");
+    foreach(k in B.Stats) text+=k=="matk" ? put(60)+put(80) : put("")+put("");
+    text+=put(1)+put("perk.killing_frenzy")+put(0)+put(0)+put(0);
+    local b=B.decodeBuilds(text,defs)[0];
+    check(!("weights" in b) && B.buildWeights(b).matk==1 && b.targets.matk==60 && b.preferred.matk==80,"BL1 lost its targets or implicit weights");
+    check(B.validBuild(b,defs) && B.buildProblems(b,defs).len()==0 && b.route[0]=="perk.killing_frenzy","BL1 build failed the current rules");
+    check(B.encodeBuilds([b],defs).slice(0,4)=="BL2|","BL1 was written back instead of BL2");
 };
 cases.gradual_threshold_and_joint_budget <- function() {
     local b=userBuild(),p=B.makePlan(b),s=fixture();s.normalRows=0;s.free=0;s.futurePerks=0;
