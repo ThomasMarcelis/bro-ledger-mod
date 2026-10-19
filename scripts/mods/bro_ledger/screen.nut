@@ -50,31 +50,27 @@
 };
 ::BroLedger.view <- function(actor, catalog, settings, library=null)
 {
-    local state=this.actorState(actor),snapshot=this.readActor(actor),defs=this.perkDefs();
-    if(library==null) library=this.readLibrary(this.libraryStore(),defs,::World.Flags);
+    local state=this.actorState(actor),snapshot=this.readActor(actor),defs=this.perkDefs(),flags=actor.getFlags();
+    local retired=flags.has(this.SchemaFlag) && [1,2,3,4].find(flags.get(this.SchemaFlag))!=null && state.plan==null && state.issue==null;
+    if(library==null) library=this.readLibrary(this.libraryStore(),defs);
     local starters=catalog && settings.ShowStarterBuilds ? this.StarterBuilds : [];
     local out={actor=actor.getID(),name=actor.getName(),revision=state.revision,issue=state.issue,plan=null,
         collapsed=this.readCollapsed(actor),
+        planNotice=retired ? "This brother's plan was saved by a pre-0.5 version and can no longer be read. Track a build again." : null,
         stars=this.copy(snapshot.stars),notes=snapshot.notes,warnings=snapshot.warnings,defs=defs,builds=[],offer=null,
-        libraryIssue=library.issue,libraryNotice=("notice" in library ? library.notice : null),library=library.builds,
+        libraryIssue=library.issue,library=library.builds,
         starters=starters,effects=settings.ShowPerkEffects ? this.currentEffects(actor,snapshot.perks) : null,
         tagIcons=this.tagIcons(defs),weaponTags=this.WeaponTags,playstyleTags=this.PlaystyleTags};
     if(catalog) out.builds=this.compare(snapshot,defs,library.builds,starters).builds;
     if(state.issue!=null || state.plan==null) return out;
     local saved=state.plan;
-    out.plan={build=saved.build,label=saved.label,enabled=saved.enabled,legacy=saved.schema<4};
+    out.plan={build=saved.build,label=saved.label,enabled=saved.enabled};
     if(!saved.enabled) return out;
     local plan=this.guidancePlan(saved,snapshot);
     out.plan.route<-this.route(plan,snapshot,defs);
     if(out.plan.route.next!=null && !actor.isPerkUnlockable(out.plan.route.next)) out.plan.route.next=null;
     out.plan.order<-this.copy(saved.route);
     out.plan.flex<-this.flexPerks(plan,snapshot,defs);
-    out.plan.options<-[];
-    foreach(index,option in ("options" in plan ? plan.options : [])) {
-        local active=plan.swaps.find(index)!=null,from=active ? option.with : option.replace;
-        if(from in snapshot.perks || plan.route.find(from)==null) continue;
-        out.plan.options.push({index=index,replace=option.replace,with=option.with,active=active,condition=option.condition});
-    }
     foreach(k,v in this.assess(this.forPlan(snapshot,plan),plan,this.planPreferred(plan))) out.plan[k]<-v;
     if(settings.LevelUpRecommendations && state.offer!=null && state.offer.level==snapshot.level &&
         state.offer.pending==snapshot.pending && snapshot.pending>0) {
@@ -101,7 +97,7 @@
     if(actor==null) return {error="Select a living company brother."};
     local state=this.actorState(actor),previous=state.plan,revision=state.revision,collapsed=this.readCollapsed(actor);
     try {
-        local defs=this.perkDefs(),store=this.libraryStore(),library=this.readLibrary(store,defs,::World.Flags),next=library.builds,changed=false,share=null,notice=library.notice;
+        local defs=this.perkDefs(),store=this.libraryStore(),library=this.readLibrary(store,defs),next=library.builds,changed=false,share=null,notice=null;
         if(write || data.action=="export") {
             if(!("epoch" in data) || !("revision" in data) || data.epoch!=context.epoch ||
                 data.actor!=context.actor || data.revision!=state.revision || !("libraryToken" in context) || context.libraryToken!=library.token)
@@ -110,7 +106,7 @@
         local source="source" in data ? data.source : "library";
         if(["library","starter"].find(source)==null) throw "Unknown build source.";
         if(source=="starter" && ["track","export"].find(data.action)==null) throw "Starter templates are read-only. Copy and edit one in your library.";
-        if(["track","replace","enabled"].find(data.action)!=null && state.issue!=null) throw state.issue;
+        if(["track","enabled"].find(data.action)!=null && state.issue!=null) throw state.issue;
         if(["saveBuild","deleteBuild","import","export","track"].find(data.action)!=null && source=="library" && library.issue!=null) throw library.issue;
         if(data.action=="saveBuild") {
             if(!("definition" in data) || !("create" in data) || typeof data.create!="bool")
@@ -132,7 +128,7 @@
             if(!("text" in data) || !("policy" in data)) throw "Paste share text and choose a duplicate policy.";
             local importInfo={};
             next=this.mergeBuilds(next,this.decodeBuilds(data.text,defs,importInfo),data.policy,defs);changed=true;
-            if(importInfo.ignoredExtra) notice=(notice==null ? "" : notice+" ")+"Extra text after the first build block was ignored.";
+            if(importInfo.ignoredExtra) notice="Extra text after the first build block was ignored.";
         }
         else if(data.action=="export") {
             if(!("build" in data) || (data.build!=null && typeof data.build!="string")) throw "Choose one build or the whole library.";
@@ -151,16 +147,6 @@
             if(!("enabled" in data) || typeof data.enabled!="bool" || state.plan==null) throw "No saved plan.";
             state.plan=this.copy(state.plan);state.plan.enabled=data.enabled;
         }
-        else if(data.action=="replace") {
-            if(state.plan==null || !state.plan.enabled || state.plan.schema>=4) throw "No legacy perk alternative.";
-            local snapshot=this.readActor(actor),plan=this.guidancePlan(state.plan,snapshot);
-            if(!("index" in data) || typeof data.index!="integer" || data.index<0 || data.index>=plan.options.len() ||
-                !("replace" in data) || !("with" in data) || !("active" in data)) throw "Unknown perk alternative.";
-            local option=plan.options[data.index];
-            if(data.replace!=option.replace || data.with!=option.with || data.active!=(plan.swaps.find(data.index)!=null) ||
-                !(option.replace in defs) || !(option.with in defs)) throw "Perk alternatives changed; refresh.";
-            state.plan=this.replacePlan(plan,data.index,snapshot.perks);
-        }
         else if(data.action=="collapse") {
             if(!("collapsed" in data) || typeof data.collapsed!="bool") throw "Unknown panel state.";
             this.writeCollapsed(actor,data.collapsed);
@@ -172,8 +158,8 @@
             state.revision++;
         }
         // Prepare the complete response before committing library bytes, so read errors cannot partially import.
-        local result=this.view(actor,data.action!="refresh" && data.action!="enabled" && data.action!="replace" && data.action!="collapse",context.settings,
-            {builds=next,issue=library.issue,notice=notice});
+        local result=this.view(actor,data.action!="refresh" && data.action!="enabled" && data.action!="collapse",context.settings,
+            {builds=next,issue=library.issue});
         result.epoch<-context.epoch;result.seq<-data.seq;result.title<-this.Name;result.settings<-context.settings;
         if(share!=null) result.share<-share;
         if(notice!=null) result.notice<-notice;

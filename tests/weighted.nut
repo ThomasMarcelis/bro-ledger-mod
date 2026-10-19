@@ -46,15 +46,15 @@ cases.weighted_score_matches_exhaustive_legal_schedules <- function() {
     }
 };
 
-cases.weighted_formats_and_old_snapshots <- function() {
+cases.weighted_formats_and_snapshot_immutability <- function() {
     local b=userBuild();b.weights<-B.buildWeights(b);b.weights.matk=10;b.weights.mdef=0;
     local wire=B.encodeBuilds([b],defs);check(wire.slice(0,4)=="BL2|" && same(B.decodeBuilds(wire,defs),[b]),"weighted sharing lost data");
     local p=B.makePlan(b);check(p.schema==5 && B.validPlan(p) && same(p.weights,b.weights),"weighted plan snapshot invalid");
     foreach(value in [-1,11,1.5,true,"2",0.0/0.0]) {local bad=B.copy(b);bad.weights.hp=value;check(!B.validBuild(bad,defs),"invalid weight accepted");}
-    local old=B.copy(p);old.schema=4;delete old.weights;check(B.validPlan(old),"schema 4 became unreadable");
-    local before=B.copy(old);B.assess(fixture(),old,old.preferredTargets);check(same(old,before),"old snapshot rewritten on read");
-    local legacy="BL1|1:11:a1:A";for(local i=0;i<16;i++)legacy+="0:";legacy+="1:01:01:01:0";
-    local decoded=B.decodeBuilds(legacy,defs)[0];foreach(k,w in B.buildWeights(decoded))check(w==1,"BL1 weight default changed");
+    local before=B.copy(p);B.assess(fixture(),p,p.preferredTargets);check(same(p,before),"snapshot rewritten on read");
+    delete b.weights;check(B.validBuild(b,defs),"optional weights became required");
+    local decoded=B.decodeBuilds(B.encodeBuilds([b],defs),defs)[0];
+    foreach(k,w in B.buildWeights(decoded)) check(w==1,"omitted build weights lost their default");
 };
 
 cases.linear_fit_handles_a_constant_zero_endpoint <- function() {

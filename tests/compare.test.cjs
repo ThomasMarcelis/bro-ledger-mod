@@ -81,16 +81,17 @@ test('failed validation retains editor data and permits correction; stale editor
     const save=s.button('Save build');s.owner.actor=8;click(save);assert.equal(s.calls.length,1);
 });
 test('single/bulk sharing relays inert text, explicit duplicate policy, and selection fallback',()=>{
-    const s=fixture(1);click(s.button('Export my builds'));assert.equal(s.calls[0].request.build,null);s.reply({share:'BL1|1:0'});
+    const s=fixture(1),exportBuilds=s.button('Export my builds');click(exportBuilds);assert.equal(s.calls[0].request.build,null);s.reply({share:'BL2|1:0'});
+    click(exportBuilds);assert.equal(s.calls.length,1,'a detached export control sent another request');
     assert.equal(s.button('Paste clipboard'),undefined);
-    const area=s.byClass('bl-share-text')[0];click(s.button('Select all text'));assert.equal(area.selected,true);assert.equal(area.val(),'BL1|1:0');
+    const area=s.byClass('bl-share-text')[0];click(s.button('Select all text'));assert.equal(area.selected,true);assert.equal(area.val(),'BL2|1:0');
     assert.equal(area.prop('readOnly'),true);assert.equal(s.calls.length,1);
-    s.owner.share(s.owner.data,null);s.byClass('bl-share-text')[0].val('BL1|untrusted text');click(s.button('Import builds'));
-    assert.equal(s.calls.at(-1).request.text,'BL1|untrusted text');
+    s.owner.share(s.owner.data,null);s.byClass('bl-share-text')[0].val('BL2|untrusted text');click(s.button('Import builds'));
+    assert.equal(s.calls.at(-1).request.text,'BL2|untrusted text');
 });
 test('mouse paste selects the target and requests one replacement per click without importing or normalizing text',()=>{
     const s=fixture(1);s.owner.share(s.data,null);const area=s.byClass('bl-share-text')[0];
-    area.val('previous input');let commands=0,clipboard='BL1|1:0';
+    area.val('previous input');let commands=0,clipboard='BL2|1:0';
     global.document={execCommand(...args){
         assert.equal(this,global.document);assert.deepEqual(args,['paste']);commands++;
         assert.equal(area.focused,true);assert.equal(area.selectionStart,0);assert.equal(area.selectionEnd,area.val().length);
@@ -99,7 +100,7 @@ test('mouse paste selects the target and requests one replacement per click with
     }};
     const paste=s.button('Paste clipboard');
     for(let i=1;i<=2;i++){click(paste);assert.equal(commands,i);assert.equal(area.val(),clipboard);assert.deepEqual(s.calls,[]);}
-    clipboard='  BL1|1:0BL1|1:0\n';click(paste);assert.equal(commands,3);assert.equal(area.val(),clipboard);
+    clipboard='  BL2|1:0BL2|1:0\n';click(paste);assert.equal(commands,3);assert.equal(area.val(),clipboard);
     assert.deepEqual(s.calls,[]);click(s.button('Import builds'));
     assert.equal(s.calls.length,1);assert.equal(s.calls[0].request.action,'import');assert.equal(s.calls[0].request.text,clipboard.replace(/^\s+/,''));
 });
@@ -114,21 +115,21 @@ test('unavailable, refused, throwing or empty clipboard paste retains input and 
         assert.equal(area.val(),previous);assert.equal(area.prop('readOnly'),false);assert.deepEqual(s.calls,[]);
         const error=s.byClass('bl-error')[0];assert.ok(error);assert.notEqual(error.hidden,true);
         assert.match(error.children[0].value,/paste manually/i);
-        area.val('BL1|manual input');click(s.button('Import builds'));
-        assert.equal(s.calls.length,1);assert.equal(s.calls[0].request.text,'BL1|manual input');
+        area.val('BL2|manual input');click(s.button('Import builds'));
+        assert.equal(s.calls.length,1);assert.equal(s.calls[0].request.text,'BL2|manual input');
     }
 });
 test('paste can recover after failure, and stale import controls cannot read the clipboard',()=>{
     const s=fixture(0);s.owner.share(s.data,null);const area=s.byClass('bl-share-text')[0],paste=s.button('Paste clipboard');let commands=0;
-    global.document={execCommand(){commands++;if(commands===1)return false;area.val('BL1|1:0');return true;}};
+    global.document={execCommand(){commands++;if(commands===1)return false;area.val('BL2|1:0');return true;}};
     click(paste);assert.equal(s.byClass('bl-error').length,1);click(paste);assert.equal(s.byClass('bl-error').length,0);
-    assert.equal(area.val(),'BL1|1:0');s.owner.share(s.data,'export text');click(paste);
+    assert.equal(area.val(),'BL2|1:0');s.owner.share(s.data,'export text');click(paste);
     assert.equal(commands,2);assert.deepEqual(s.calls,[]);assert.equal(s.byClass('bl-share-text')[0].val(),'export text');
 });
 test('first-block import relays excess notice once after success and only when supplied',()=>{
     for(const notice of [undefined,'Extra text after the first build block was ignored.']){
-        const s=fixture(0);s.owner.share(s.data,null);s.byClass('bl-share-text')[0].val('  BL1|1:0BL1|truncated\n');
-        click(s.button('Import builds'));assert.equal(s.calls[0].request.text,'BL1|1:0BL1|truncated\n');
+        const s=fixture(0);s.owner.share(s.data,null);s.byClass('bl-share-text')[0].val('  BL2|1:0BL2|truncated\n');
+        click(s.button('Import builds'));assert.equal(s.calls[0].request.text,'BL2|1:0BL2|truncated\n');
         assert.equal(s.all().filter(n=>n.attr('role')==='status').length,0);
         s.reply(notice?{notice}:{});const status=s.all().filter(n=>n.attr('role')==='status');
         assert.equal(status.length,notice?1:0);
@@ -296,13 +297,4 @@ test('hiding starters drops the source chooser and stale controls while personal
     click(s.button('Source: All'));click(s.button('Starters'));
     assert.equal(s.byClass('bl-build-row').length,1);
     assert.equal(s.byClass('bl-build-row')[0].attr('data-source'),'starter');
-});
-
-test('legacy alternatives relay the saved option and stale dialogs cannot replace perks',()=>{
-    const option={index:0,replace:'perk.colossus',with:'perk.gifted',active:false,condition:'A different future pick.'};
-    const s=fixture(0,{label:'Saved',enabled:true,options:[option]});
-    const action=s.button('Replace Colossus with Gifted');click(action);
-    assert.equal(s.calls[0].request.action,'replace');assert.equal(s.calls[0].request.index,0);
-    assert.equal(s.calls[0].request.replace,option.replace);assert.equal(s.calls[0].request.with,option.with);
-    s.reply();click(action);assert.equal(s.calls.length,1);
 });

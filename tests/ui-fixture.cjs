@@ -65,7 +65,7 @@ function fixture(count=14, plan=null, issue=null) {
         starters:[],library:Array.from({length:count},(_,i)=>build(i+1)),newBuildID:'user_33',weaponTags:['Shield','Hammer','Axe','Mace','Flail','Bow'],playstyleTags:['Tank','Frontline','Ranged'],
         stars:{},builds:[]};
     data.builds=data.library.map((b,i)=>({...b,source:'library',score:100-i,order:b.route,projection:{horizon:11},jointState:'possible',statRows:[],
-        route:{remaining:b.route,acquired:[],blocked:[],offplan:[],unknown:[],conflicts:[],feasible:true}}));
+        route:{remaining:b.route,acquired:[],blocked:[],offplan:[],unknown:[],feasible:true}}));
     owner.data=data;owner.compare(data);
     function all(){const out=[];const visit=n=>{out.push(n);n.children.forEach(visit);};visit(owner.popup);return out;}
     return {owner,data,calls,notices,nodes,all,window:global.window,byClass:cls=>all().filter(n=>n.classes.has(cls)),

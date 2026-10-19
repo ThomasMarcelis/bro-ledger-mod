@@ -137,9 +137,9 @@ try
     local screenActorFlags={has=@(k) k in actorFlagValues,get=@(k) k in actorFlagValues?actorFlagValues[k]:null,
         set=function(k,v){actorFlagValues[k]<-v;},remove=function(k){if(k in actorFlagValues) delete actorFlagValues[k];}};
     local actor={m={},getID=@() 7,getName=@() "Test brother",isPerkUnlockable=@(id) true,getFlags=@() screenActorFlags};
-    local state=B.actorState(actor),legacy={schema=4,revision=5,enabled=true,build="user_1",label="Saved",targets={},preferredTargets={},route=[],flex=[],weaponTags=[],playstyleTags=[]};
+    local state=B.actorState(actor),saved=B.makePlan(userBuild());saved.label="Saved";
     ::World <- {Flags={has=@(k) false}};B.perkDefs=@() {};
-    legacy.revision=1;state.plan=legacy;
+    saved.revision=1;state.plan=saved;
     B.ownedActor=function(id){if(id!=7) throw "Wrong actor";return actor;};
     local view=B.view,reads=0;
     B.view=function(actor,catalog,options,library=null){reads++;return {actor=7,revision=state.revision,plan=B.copy(state.plan)};};
@@ -158,7 +158,7 @@ try
         settings.getSetting("Enabled").set(true);screen.hide();screen.show();
         check("error" in B.command(screen,{action="track",actor=7,seq=3,epoch=first.epoch,revision=state.revision,build="fencer"}),"old epoch changed reopened plan");
         response=B.command(screen,{action="refresh",actor=7,seq=4});
-        check(response.settings.Enabled && same(response.plan,legacy),"re-enable lost 0.1.0 intent");
+        check(response.settings.Enabled && same(response.plan,saved),"re-enable lost saved intent");
         state.plan.enabled=false;screen.hide();screen.show();
         check(!B.command(screen,{action="refresh",actor=7,seq=5}).plan.enabled,"global re-enable enabled a dormant brother");
         state.issue="Future schema";local future=B.copy(state);

@@ -59,15 +59,6 @@ function actorFixture()
 }
 function skill(id,type) {return {getID=@() id,getType=@() type};}
 
-// Historical owned shape, independent of the current plan writer.
-function oldPlan(build)
-{
-    return {schema=2, revision=2, enabled=true, build=build.id, label=build.label,
-        route=B.copy(build.route), targets=B.copy(build.targets), priority=B.copy(build.priority),
-        preferredTargets=B.copy(build.preferred), armour=build.armour, swaps=[], options=B.copy(build.swaps),
-        weapons=build.weapons, patterns=B.copy(build.patterns)};
-}
-
 function userBuild(id="user_1") {
     return {id=id,label="TankFighter",weights={hp=1,resolve=1,fatigue=1,initiative=1,matk=1,ratk=1,mdef=1,rdef=1},targets={matk=60,mdef=10},preferred={matk=80,mdef=30},
         route=["perk.colossus","perk.dodge","perk.gifted"],flex=["perk.gifted"],

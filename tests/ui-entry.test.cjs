@@ -130,6 +130,21 @@ test('an empty panel offers no collapse control and a collapsed brother keeps th
     assert.equal(f.owner.entry.hidden, false, 'collapsing hid the Bro Planner button');
 });
 
+test('a retired plan notice shows without a plan or effects and follows the collapse preference', () => {
+    const f=entryFixture(),panel=f.owner.panel,planNotice='Retired plan; track a build again.';
+    f.reply({plan:null,effects:null,planNotice,collapsed:false});
+    const notice=()=>panel.find('.bl-warning').items.some(n=>n.value===planNotice);
+    const toggle=()=>panel.children.find(n=>n.classes.has('bl-collapse'));
+    assert.equal(panel.hidden,false);assert.equal(notice(),true);
+    click(toggle());assert.equal(notice(),false);assert.equal(panel.hidden,false);
+    f.reply({plan:null,effects:null,planNotice,collapsed:true});
+    click(toggle());assert.equal(notice(),true);
+    f.reply({plan:null,effects:null,planNotice,collapsed:false});
+    f.owner.compare(f.owner.data);
+    assert.ok(f.byClass('bl-warning').some(n=>n.value===planNotice));
+    f.owner.data.planNotice=null;f.owner.render();assert.equal(panel.hidden,true);
+});
+
 test('collapsing is ignored before data and never fires for a stale brother', () => {
     const f = entryFixture();
     const before = f.calls.length;

@@ -118,7 +118,7 @@ test('render hides global UI while retaining the compact plan', () => {
         owner.visible = true; owner.actor = 7;
         owner.panel = node; owner.entry = {toggle(value) { visibility.push(value); }};
         owner.markPerks = () => {}; owner.renderOffer = () => {};
-        const route = {next: 'perk.a', remaining: ['perk.a'], offplan: [], unknown: [], blocked: [], conflicts: [], feasible: true};
+        const route = {next: 'perk.a', remaining: ['perk.a'], offplan: [], unknown: [], blocked: [], feasible: true};
         owner.data = {settings: {Enabled: true, PerkHighlights: false}, defs: {'perk.a': {name: 'Perk sentinel'}}, notes: [], warnings: [],
             effects: Object.fromEntries(['dodge', 'nimble', 'battleForged'].map(id => [id, {owned: false, value: null}])),
             plan: {label: 'Saved route', enabled: true, score: 50, projection: {horizon: 11}, statRows: [], route,

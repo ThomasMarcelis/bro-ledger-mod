@@ -34,79 +34,14 @@
     return true;
 };
 
-::BroLedger.validTargets <- function(targets)
-{
-    if (typeof targets != "table" || targets.len() > 8) return false;
-    foreach (key, value in targets)
-        if (this.Stats.find(key) == null || !this.number(value) || value <= 0 || value > 500) return false;
-    return true;
-};
-
 ::BroLedger.validPlan <- function(plan)
 {
     if (typeof plan != "table" || !("schema" in plan) || typeof plan.schema != "integer" ||
-        ([1, 2, 3, 4, 5].find(plan.schema) == null)) return false;
-    if(plan.schema>=4) {
-        if(plan.len()!=(plan.schema==5 ? 12 : 11)) return false;
-        foreach(k in ["revision","enabled","build","label","route","targets","preferredTargets","flex","weaponTags","playstyleTags"]) if(!(k in plan)) return false;
-        local build={id=plan.build,label=plan.label,route=plan.route,targets=plan.targets,preferred=plan.preferredTargets,
-            flex=plan.flex,weaponTags=plan.weaponTags,playstyleTags=plan.playstyleTags};
-        if(plan.schema==5) {if(!("weights" in plan)) return false;build.weights<-plan.weights;}
-        return typeof plan.revision=="integer" && plan.revision>0 && typeof plan.enabled=="bool" && this.validBuild(build);
-    }
-    if (plan.len() != (plan.schema == 1 ? 13 : plan.schema == 2 ? 14 : 18)) return false;
-    foreach (key in ["revision", "enabled", "build", "label", "route", "targets", "priority", "armour", "swaps", "options", "patterns", "weapons"])
-        if (!(key in plan)) return false;
-    if (typeof plan.revision != "integer" || plan.revision < 1 || plan.revision > 1000000 || typeof plan.enabled != "bool" ||
-        !this.validString(plan.build) || !this.validString(plan.label) || !this.validString(plan.weapons, 800) ||
-        !this.uniqueStrings(plan.route, 12) || plan.route.len() == 0 || !this.uniqueStrings(plan.priority, 8) ||
-        !this.validTargets(plan.targets) || plan.targets.len() == 0 ||
-        (plan.armour != "nimble" && plan.armour != "battle_forged") ||
-        typeof plan.swaps != "array" || plan.swaps.len() > 5 || typeof plan.options != "array" || plan.options.len() > 5 ||
-        typeof plan.patterns != "array" || plan.patterns.len() > 4) return false;
-    if (plan.schema >= 2)
-    {
-        if (!("preferredTargets" in plan) || !this.validTargets(plan.preferredTargets)) return false;
-        foreach (key, value in plan.targets)
-            if (!(key in plan.preferredTargets) || plan.preferredTargets[key] < value) return false;
-    }
-    if (plan.schema == 3)
-    {
-        foreach (key in ["core", "flex", "hands", "variant"]) if (!(key in plan)) return false;
-        if (!this.uniqueStrings(plan.core, 8) || !this.uniqueStrings(plan.flex, 12) || typeof plan.hands != "bool" ||
-            ["ordinary", "manhunter7"].find(plan.variant) == null) return false;
-        foreach (key in plan.core) if (!(key in plan.targets)) return false;
-    }
-    foreach (key in plan.priority) if (this.Stats.find(key) == null) return false;
-    foreach (option in plan.options)
-        if (typeof option != "table" || !("replace" in option) || !("with" in option) || !("condition" in option) ||
-            !this.validString(option.replace) || !this.validString(option.with) || !this.validString(option.condition, 800)) return false;
-    local seen = {};
-    foreach (index in plan.swaps)
-    {
-        if (typeof index != "integer" || index < 0 || index >= plan.options.len() || index in seen) return false;
-        seen[index] <- true;
-        if (plan.route.find(plan.options[index].with) == null || plan.route.find(plan.options[index].replace) != null) return false;
-    }
-    foreach (cycle in plan.patterns)
-    {
-        if (typeof cycle != "table") return false;
-        foreach (key in ["label", "steps", "turns", "buffer", "move", "kill"]) if (!(key in cycle)) return false;
-        if (!this.validString(cycle.label, 800) || typeof cycle.steps != "array" || cycle.steps.len() == 0 || cycle.steps.len() > 3 ||
-            typeof cycle.turns != "integer" || cycle.turns < 1 || cycle.turns > 5 || !this.number(cycle.buffer) || cycle.buffer < 0 || cycle.buffer > 50 ||
-            !this.number(cycle.move) || cycle.move < 0 || cycle.move > 10 || typeof cycle.kill != "bool") return false;
-        if ("requires" in cycle && !this.uniqueStrings(cycle.requires, 6)) return false;
-        if ("condition" in cycle && !this.validString(cycle.condition, 800)) return false;
-        foreach (step in cycle.steps)
-        {
-            if (typeof step != "table") return false;
-            foreach (key in ["ids", "count", "fat", "ap", "mastery"]) if (!(key in step)) return false;
-            if (!this.uniqueStrings(step.ids, 4) || step.ids.len() == 0 || typeof step.count != "integer" || step.count < 1 || step.count > 3 ||
-                !this.number(step.fat) || step.fat < 0 || step.fat > 100 || !this.number(step.ap) || step.ap < 0 || step.ap > 9 ||
-                typeof step.mastery != "string" || step.mastery.len() > 80) return false;
-        }
-    }
-    return true;
+        plan.schema != 5 || plan.len() != 12) return false;
+    foreach(k in ["revision","enabled","build","label","weights","route","targets","preferredTargets","flex","weaponTags","playstyleTags"]) if(!(k in plan)) return false;
+    local build={id=plan.build,label=plan.label,weights=plan.weights,route=plan.route,targets=plan.targets,preferred=plan.preferredTargets,
+        flex=plan.flex,weaponTags=plan.weaponTags,playstyleTags=plan.playstyleTags};
+    return typeof plan.revision=="integer" && plan.revision>0 && typeof plan.enabled=="bool" && this.validBuild(build);
 };
 
 ::BroLedger.actorState <- function(actor)
@@ -127,7 +62,8 @@
         if (flags.has(this.BlobFlag)) state.issue = "Unrecognized saved plan; retained without changes.";
         return;
     }
-    if ([1, 2, 3, 4, 5].find(flags.get(this.SchemaFlag)) == null)
+    if ([1, 2, 3, 4].find(flags.get(this.SchemaFlag)) != null) return;
+    if (flags.get(this.SchemaFlag) != 5)
     {
         state.issue = "Saved by a newer or unsupported " + this.Name + " schema; retained without changes.";
         return;

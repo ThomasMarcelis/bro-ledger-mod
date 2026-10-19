@@ -1,13 +1,4 @@
-local B=::BroLedger, cases={}, defs=dofile("tests/perk_unlocks.nut"), legacy=dofile("tests/legacy.nut");
-function legacyPlan(id) {return oldPlan(legacy[id]);}
-
-cases.replacement_conflicts_and_sunk_perks <- function() {
-    local p=legacyPlan("nimble_2h_berserk");
-    local q=B.replacePlan(p,0,{});
-    check(rejects(@() B.replacePlan(q,1,{})),"conflicting masteries accepted");
-    check(rejects(@() B.replacePlan(p,0,{["perk.mastery.axe"]=true})),"acquired default refunded");
-    check(B.replacePlan(q,0,{}).route.find("perk.mastery.axe")!=null,"cannot reverse unspent choice");
-};
+local B=::BroLedger, cases={}, defs=dofile("tests/perk_unlocks.nut");
 
 cases.gifted_needs_obtainable_capacity <- function() {
     local b=userBuild(),s=calibratedBro(b,false),p=B.makePlan(b);

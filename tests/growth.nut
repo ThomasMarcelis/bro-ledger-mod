@@ -65,7 +65,8 @@ cases.current_offer <- function()
 {
     local s = fixture(); s.normalRows = 1;
     local offer = {hp=4, resolve=3, fatigue=2, initiative=3, matk=1, ratk=2, mdef=3, rdef=2};
-    local advice = B.adviseOffer(s, {route=[],targets={hp=4, matk=1, mdef=3}, priority=["matk","mdef","hp"]}, offer);
+    local b=userBuild();b.route=[];b.flex=[];b.targets={hp=4,matk=1,mdef=3};b.preferred=B.copy(b.targets);
+    local advice = B.adviseOffer(s, B.makePlan(b), offer);
     check(advice.picks.len()==3 && advice.picks.find("hp")!=null && advice.picks.find("mdef")!=null && advice.picks.find("matk")!=null, "offered triple does not reach targets");
     check(s.stats.hp==0 && offer.hp==4, "advice mutated source");
     check(advice.considered==56, "ordinary choices not fully enumerated");

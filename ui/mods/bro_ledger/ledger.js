@@ -229,7 +229,8 @@ var BroLedgerUI = (function () {
         var loose = $('<div class="bl-effects bl-effects-only"/>');
         var hasEffects = !tracked && data.effects && this.effects(loose, data.effects);
         // An empty panel has nothing to collapse, so it shows no toggle at all.
-        if (!tracked && !hasEffects) { this.renderOffer(); return; }
+        if (!tracked && data.planNotice) text(loose, data.planNotice).addClass('bl-warning');
+        if (!tracked && !hasEffects && !data.planNotice) { this.renderOffer(); return; }
         if (data.collapsed) {
             this.panel.show().addClass('bl-collapsed');
             this.collapseToggle(this.panel, true);
@@ -351,21 +352,9 @@ var BroLedgerUI = (function () {
             text(details,data.libraryIssue || (data.builds.length===0 ? 'Your library is empty. Create a build or import share text.' :
                 filtered.length ? 'Select a build to inspect its targets and perk order.' : 'No builds match these filters.'));
             if(data.issue) text(details,data.issue).addClass('bl-warning');
+            if(data.planNotice) text(details,data.planNotice).addClass('bl-warning');
             if(hasStarters) text(details,'Starter templates are starting guides and may be suboptimal. Select one to inspect it, track it, or copy it into your library.').addClass('bl-starter-notice');
             if(data.plan) text(details,(data.plan.enabled?'Tracking: ':'Disabled plan: ')+data.plan.label);
-            // Legacy replacements stay deliberate and reachable from Change build, outside the compact panel.
-            if(data.plan && data.plan.options && data.plan.options.length) {
-                var alternatives=$('<div class="bl-alternatives"/>').appendTo(details);
-                text(alternatives,'Saved perk alternatives',true);
-                text(alternatives,'Change a future pick in this saved plan. This does not learn or refund a perk.');
-                data.plan.options.forEach(function(option){
-                var from=perkName(option.active?option.with:option.replace,data.defs),to=perkName(option.active?option.replace:option.with,data.defs);
-                text(alternatives,'Planned: '+from+'. '+option.condition);
-                button(alternatives,'Replace '+from+' with '+to,function(){
-                    if(self.current(data,popup)) self.request('replace',option,function(reply){self.closeCompare();});
-                });
-                });
-            }
             popup.findPopupDialogOkButton().enableButton(false);
         }
         popup.addPopupDialogCancelButton(function(){if(self.popup===popup)self.closeCompare();});
@@ -511,7 +500,7 @@ var BroLedgerUI = (function () {
     Controller.prototype.share = function(data, exported){
         var self=this,popup=this.dialog(exported===null?'Import builds':'Export builds');popup.addClass('bl-sharing');
         var body=$('<div class="bl-share-body"/>').appendTo(popup.findPopupDialogContentContainer());
-        text(body,exported===null?'Paste a single or bulk BL1 or BL2 string. Imports apply together.':'Select text, then Ctrl+C. Paste into another campaign or share with a player.',true);
+        text(body,exported===null?'Paste a single or bulk BL2 string. Imports apply together.':'Select text, then Ctrl+C. Paste into another campaign or share with a player.',true);
         text(body,'Your build library is shared across campaigns. Tracked plans stay with each brother.');
         var area=$('<textarea class="bl-share-text" spellcheck="false" maxlength="48000"/>').attr('aria-label','Build share text').val(exported||'').prop('readOnly',exported!==null).appendTo(body);
         if(exported===null)button(body,'Paste clipboard',function(){

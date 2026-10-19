@@ -24,7 +24,7 @@
 ::BroLedger.potential <- function(snapshot, targets, preferred, weights=null)
 {
     local result={score=null,loss=null,minimumLoss=null,minimumGap=null,allocation={}},active=[],ceiling={};
-    if(preferred==null || !snapshot.growthKnown) return result;
+    if(!snapshot.growthKnown) return result;
     local caps=[snapshot.normalRows,snapshot.veteranRows,snapshot.giftRows];
     foreach(k in this.Stats) {
         if(!(k in targets) || this.statWeight(weights,k)==0) continue;
@@ -232,10 +232,10 @@
 {
     local weights=this.buildWeights(plan),fit=this.potential(snapshot,plan.targets,preferred,weights);
     local projection=this.project(snapshot,plan,preferred,fit),rows=[],goals={};
-    if(preferred!=null) foreach(k,v in preferred) if(k in plan.targets && weights[k]>0) goals[k]<-v;
-    local joint=preferred==null ? {known=false,feasible=false,shortfalls=[]} : this.feasibility(snapshot,goals,"high");
+    foreach(k,v in preferred) if(k in plan.targets && weights[k]>0) goals[k]<-v;
+    local joint=this.feasibility(snapshot,goals,"high");
     foreach(k in this.Stats) {
-        local now=this.currentStat(snapshot,k),ideal=preferred!=null && k in preferred ? preferred[k] : null;
+        local now=this.currentStat(snapshot,k),ideal=k in preferred ? preferred[k] : null;
         local maximum=snapshot.growthKnown ? this.endpoint(snapshot,k,snapshot.normalRows,snapshot.veteranRows,snapshot.giftRows,"high") : null;
         rows.push({key=k,now=now,minimum=k in plan.targets ? plan.targets[k] : null,ideal=ideal,weight=weights[k],
             expected=projection.known ? projection.stats[k] : null,maximum=maximum,
@@ -243,7 +243,7 @@
             idealState=ideal==null ? "none" : weights[k]==0 ? "ignored" : now==null ? "unknown" : now>=ideal ? "met" : maximum!=null && maximum<ideal ? "impossible" : "grow"});
     }
     return {score=fit.score,minimumGap=fit.minimumGap,projection=projection,statRows=rows,
-        jointState=preferred!=null && goals.len()==0 ? "untargeted" : !joint.known ? "unknown" : joint.feasible ? "possible" : joint.shortfalls.len()>0 ? "individual" : "impossible"};
+        jointState=goals.len()==0 ? "untargeted" : !joint.known ? "unknown" : joint.feasible ? "possible" : joint.shortfalls.len()>0 ? "individual" : "impossible"};
 };
 ::BroLedger.evaluate <- function(snapshot, build, defs)
 {
@@ -269,8 +269,6 @@
 {
     foreach(k in this.Stats) if(!(k in offer) || !this.number(offer[k]) || offer[k]<=0 || this.endpoint(snapshot,k)==null) return null;
     snapshot=this.forPlan(snapshot,plan);local preferred=this.planPreferred(plan),weights=this.buildWeights(plan),best=null;
-    // Older plans without saved Ideals can still aim at their retained Minimum.
-    if(preferred==null) preferred=plan.targets;
     for(local a=0;a<6;a++) for(local b=a+1;b<7;b++) for(local c=b+1;c<8;c++) {
         local picks=[this.Stats[a],this.Stats[b],this.Stats[c]],after=this.copy(snapshot);
         if(after.normalRows>0) after.normalRows--;else if(after.veteranRows>0) after.veteranRows--;else return null;

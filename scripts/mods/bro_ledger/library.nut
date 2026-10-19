@@ -1,8 +1,4 @@
 // Inert definitions owned by the player, not by one campaign. Built-in templates stay outside this store.
-// Campaign flags remain the legacy location and the one-way migration source.
-::BroLedger.LibraryFlag <- "BroLedger.Library";
-::BroLedger.MovedFlag <- "BroLedger.LibraryMoved";
-::BroLedger.LibraryFile <- "Library";
 ::BroLedger.LibraryLimit <- 32;
 // A brother can spend at most 10 points, or 11 when Student refunds one. Mandatory picks obey that
 // budget. Flexible picks are alternates that yield to off-route perks, so they sit on top of it.
@@ -180,7 +176,7 @@
     for(local i=1;i<=this.LibraryLimit*2+1;i++) if(this.findBuild("user_"+i,builds)==null) return "user_"+i;
     throw "Library is full.";
 };
-// BL2 adds one integer weight after each Minimum/Ideal pair. BL1 stays readable.
+// BL2 stores one integer weight after each Minimum/Ideal pair.
 ::BroLedger.encodeBuilds <- function(builds, defs=null)
 {
     if(typeof builds!="array" || builds.len()>this.LibraryLimit) throw "At most 32 builds are supported.";
@@ -200,9 +196,11 @@
 // Only explicit import supplies importInfo; saved-library reads remain strict.
 ::BroLedger.decodeBuilds <- function(source, defs=null, importInfo=null)
 {
-    if(typeof source!="string" || source.len()>this.ShareLimit || source.len()<4 || ["BL1|","BL2|"].find(source.slice(0,4))==null)
-        throw "Unsupported share version or size. Expected BL1 or BL2 text (up to 48,000 bytes).";
-    local at=4,weighted=source.slice(0,4)=="BL2|";
+    if(typeof source=="string" && source.len()>=4 && source.slice(0,4)=="BL1|")
+        throw "BL1 text from Bro Ledger 0.4 is no longer supported. Ask for a BL2 export from Bro Planner 0.5 or later.";
+    if(typeof source!="string" || source.len()>this.ShareLimit || source.len()<4 || source.slice(0,4)!="BL2|")
+        throw "Unsupported share version or size. Expected BL2 text (up to 48,000 bytes).";
+    local at=4;
     local integer=function(s,limit) {
         if(s.len()==0 || s.len()>5) throw "Invalid count.";
         local n=0;foreach(c in s) {if(c<48 || c>57) throw "Invalid count.";n=n*10+c-48;if(n>limit) throw "Count exceeds limit.";}return n;
@@ -229,13 +227,12 @@
     // Tag lists stay bounded by their own vocabularies; perk lists by the route limit.
     local listLimit=this.RouteLimit>this.WeaponTags.len() ? this.RouteLimit : this.WeaponTags.len();
     for(local i=0;i<count;i++) {
-        local b={id=take(),label=take(),targets={},preferred={},route=[],flex=[],weaponTags=[],playstyleTags=[]};
-        if(weighted) b.weights<-{};
+        local b={id=take(),label=take(),targets={},preferred={},weights={},route=[],flex=[],weaponTags=[],playstyleTags=[]};
         foreach(k in this.Stats) {
             local m=take(),ideal=take();
             if(m!="") b.targets[k]<-numeric(m);
             if(ideal!="") b.preferred[k]<-numeric(ideal);
-            if(weighted) b.weights[k]<-integer(take(),10);
+            b.weights[k]<-integer(take(),10);
         }
         foreach(values in [b.route,b.flex,b.weaponTags,b.playstyleTags]) {
             local n=integer(take(),listLimit);for(local j=0;j<n;j++) values.push(take());
@@ -257,8 +254,6 @@
     if(importInfo!=null) importInfo.ignoredExtra<-at!=source.len();
     return out;
 };
-// The player-wide store keeps definitions outside any campaign save. `flags` stays the legacy
-// location: each campaign hands its bytes over once, then stops being an authority.
 // MSU PersistentData writes under mod_config/, which no campaign save owns.
 ::BroLedger.LibraryFile <- "library";
 ::BroLedger.libraryStore <- function()
@@ -267,32 +262,12 @@
     return {has=@() mod.PersistentData.hasFile(file),get=@() mod.PersistentData.readFile(file),
         set=function(value){mod.PersistentData.createFile(file,value);}};
 };
-// One-way adoption. A campaign marked moved never contributes again, so builds deleted from the
-// player-wide library cannot reappear the next time that campaign is loaded.
-// Store access errors propagate; only unreadable campaign bytes degrade to a notice.
-::BroLedger.adoptLibrary <- function(store, flags, defs)
+::BroLedger.readLibrary <- function(store, defs)
 {
-    if(flags==null || !flags.has(this.LibraryFlag) || flags.has(this.MovedFlag)) return null;
-    local raw=flags.get(this.LibraryFlag);
-    if(typeof raw!="string") return null;
-    local held=store.has() ? store.get() : null,encoded=null;
-    try {
-        local incoming=this.decodeBuilds(raw,defs);
-        if(held!=null) incoming=this.mergeBuilds(this.decodeBuilds(held,defs),incoming,"skip",defs);
-        encoded=this.encodeBuilds(incoming,defs);
-    }
-    catch(e) {return "This campaign's saved builds could not be moved into your cross-campaign library; its bytes are retained. "+e;}
-    store.set(encoded);
-    flags.set(this.MovedFlag,true);
-    return null;
-};
-::BroLedger.readLibrary <- function(store, defs, flags=null)
-{
-    local notice=this.adoptLibrary(store,flags,defs);
-    if(!store.has()) return {builds=[],issue=null,token=null,notice=notice};
+    if(!store.has()) return {builds=[],issue=null,token=null};
     local raw=store.get();
-    try {return {builds=this.decodeBuilds(raw,defs),issue=null,token=raw,notice=notice};}
-    catch(e) {return {builds=[],issue="Library unavailable; saved bytes retained. "+e,token=raw,notice=notice};}
+    try {return {builds=this.decodeBuilds(raw,defs),issue=null,token=raw};}
+    catch(e) {return {builds=[],issue="Library unavailable; saved bytes retained. "+e,token=raw};}
 };
 ::BroLedger.writeLibrary <- function(store, builds, defs)
 {

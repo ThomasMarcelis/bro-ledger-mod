@@ -28,7 +28,7 @@ cases.empty_startup_uses_production_actor_library_and_view <- function() {
         check("effects" in r && !r.effects.dodge.owned && !r.effects.nimble.owned && !r.effects.battleForged.owned,
             "current effects missing without a tracked plan");
     }
-    check(!store.has() && !flags.has(B.LibraryFlag) && B.actorState(a).revision==0,"initial reads wrote the library or actor intent");
+    check(!store.has() && !flags.has("BroLedger.Library") && B.actorState(a).revision==0,"initial reads wrote the library or actor intent");
     local has=store.has;store.has=function(){throw "Diagnostic simulated library read failure";};
     local r=B.command(screen,{action="refresh",actor=7,seq=2});
     check("error" in r && screen.m.BroLedgerContext.seq==1,"failed read invented success or authority");
@@ -95,7 +95,7 @@ cases.invalid_first_block_import_is_atomic <- function() {
     local at=wire.find("perk.colossus"),illegal=wire.slice(0,at)+"perk.invalidx"+wire.slice(at+13),oversized=wire;
     while(oversized.len()<=B.ShareLimit) oversized+=wire;
     local writes=0;f.store.set=function(v){writes++;};
-    foreach(source in ["BL1|1:x"+wire,wire.slice(0,wire.len()-1),illegal+wire,"BL1|1:2"+wire.slice(7)+wire.slice(7),oversized]) {
+    foreach(source in ["BL2|1:x"+wire,wire.slice(0,wire.len()-1),illegal+wire,"BL2|1:2"+wire.slice(7)+wire.slice(7),oversized]) {
         local r=f.request("import",{text=source,policy="copy"});
         check("error" in r && !("notice" in r),"invalid first block was salvaged or reported success");
         check(writes==0 && original==f.store.get() && same(before,B.actorState(f.actor)) &&
@@ -163,11 +163,32 @@ cases.stale_actor_epoch_library_and_revision <- function() {
     f.store.set(B.encodeBuilds([],defs));check("error" in f.request("track",{build="user_1"}),"stale library selection accepted");
     f.screen.m.BroLedgerContext=null;check("error" in f.request("refresh"),"closed screen accepted request");
 };
+cases.retired_plan_notice_allows_retracking_before_save <- function() {
+    local f=commandFixture(),saved=null;
+    B.Mod<-{Serialization={flagDeserialize=function(...){throw "retired blob read";},
+        flagSerialize=function(id,p,flags){saved=B.copy(p);flags.set(B.BlobFlag,1);}}};
+    f.actorFlags.set(B.SchemaFlag,4);f.actorFlags.set(B.BlobFlag,"retired bytes");B.loadPlan(f.actor);
+    local state=B.actorState(f.actor),r=f.request("evaluate");
+    check(state.plan==null && state.issue==null && r.issue==null && r.planNotice!=null,"retired plan blocked tracking or lost its notice");
+    local notice=r.planNotice;
+    B.savePlan(f.actor);
+    check(f.actorFlags.get(B.SchemaFlag)==4 && f.actorFlags.get(B.BlobFlag)=="retired bytes","empty retired plan wrote flags");
+    check("error" in f.request("track",{build="unknown"}),"unknown build tracked");
+    check(f.request("refresh").planNotice==notice && state.plan==null && state.issue==null,"failed Track lost the retired notice");
+    r=f.request("track",{source="starter",build=B.StarterBuilds[0].id});
+    check(!("error" in r) && r.planNotice==null && state.plan!=null,"successful Track left a retired notice");
+    check(f.actorFlags.get(B.SchemaFlag)==4 && f.actorFlags.get(B.BlobFlag)=="retired bytes","Track wrote flags before campaign save");
+    B.savePlan(f.actor);
+    check(f.actorFlags.get(B.SchemaFlag)==5 && f.actorFlags.get(B.BlobFlag)==1 && same(saved,state.plan),"campaign save did not replace retired flags with schema 5");
+};
 cases.future_schema_global_disable_and_locked_perks <- function() {
     local f=commandFixture();f.request("evaluate");f.request("saveBuild",{definition=userBuild(),create=true});
-    B.actorState(f.actor).issue="future schema retained";
+    f.actorFlags.set(B.SchemaFlag,6);f.actorFlags.set(B.BlobFlag,"future bytes");B.loadPlan(f.actor);
+    check(B.actorState(f.actor).issue!=null && f.request("refresh").planNotice==null,"future schema did not retain its issue");
     check("error" in f.request("track",{build="user_1"}),"future plan overwritten");
-    B.actorState(f.actor).issue=null;f.actor.isPerkUnlockable=@(id) false;
+    check(f.actorFlags.get(B.SchemaFlag)==6 && f.actorFlags.get(B.BlobFlag)=="future bytes","future flags changed");
+    f.actorFlags.remove(B.SchemaFlag);f.actorFlags.remove(B.BlobFlag);B.loadPlan(f.actor);f.request("refresh");
+    f.actor.isPerkUnlockable=@(id) false;
     local r=f.request("track",{build="user_1"});check(r.plan.route.next==null,"locked native perk highlighted next");
     local before=B.copy(B.actorState(f.actor));f.screen.m.BroLedgerContext.settings.Enabled=false;
     check(f.request("refresh").plan==null,"global disable exposed plan");

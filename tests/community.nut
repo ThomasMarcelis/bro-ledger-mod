@@ -12,26 +12,26 @@ cases.reject_invalid_data <- function() {
         function(x){x.extra<-true;},function(x){x.label="";}]) {
         local bad=B.copy(b);edit(bad);check(!B.validBuild(bad,defs),"invalid build accepted");
     }
-    foreach(value in ["BL9|0:","compilestring(attack())", "BL1|99999999999999999:","BL1|1:x",B.encodeBuilds([b],defs)+"junk"])
+    foreach(value in ["BL9|0:","compilestring(attack())", "BL2|99999999999999999:","BL2|1:x",B.encodeBuilds([b],defs)+"junk"])
         check(rejects(@() B.decodeBuilds(value,defs)),"invalid envelope accepted");
 };
 cases.trailing_diagnostic_integrity <- function() {
-    local empty="BL1|1:0",one="BL1|1:11:a1:A";
-    for(local i=0;i<16;i++) one+="0:";
+    local empty="BL2|1:0",one="BL2|1:11:a1:A";
+    for(local i=0;i<8;i++) one+="0:0:1:1";
     one+="1:01:01:01:0";
     check(B.decodeBuilds(empty,defs).len()==0 && B.decodeBuilds(one,defs).len()==1,"valid shares rejected");
     local maximum=empty;for(local i=7;i<48000;i++) maximum+=format("%c",255);
     // Adler-32 known answers computed independently with Python zlib.adler32.
     local vectors=[
-        [empty+format("%c",0),7,0,"0","2448:471"],
-        [empty+format("%c",255),7,0,"255","2703:726"],
-        [empty+"\xE2\x80\x8B",7,0,"226,128,139","4463:964"],
-        [empty+empty,7,0,"66,76,49,124","7244:941"],
-        [empty+"abcdefghijklmnop",7,0,"97,98,99,100","23385:2143"],
-        [empty+"abcdefghijklmnoq",7,0,"97,98,99,100","23386:2144"],
-        [one+format("%c",0),57,1,"0","33355:3164"],
-        [empty+one.slice(7),7,0,"49,58,97,49","30140:3163"],
-        [maximum,7,0,"255,255,255,255","58897:51780"]
+        [empty+format("%c",0),7,0,"0","2454:472"],
+        [empty+format("%c",255),7,0,"255","2709:727"],
+        [empty+"\xE2\x80\x8B",7,0,"226,128,139","4471:965"],
+        [empty+empty,7,0,"66,76,50,124","7261:943"],
+        [empty+"abcdefghijklmnop",7,0,"97,98,99,100","23406:2144"],
+        [empty+"abcdefghijklmnoq",7,0,"97,98,99,100","23407:2145"],
+        [one+format("%c",0),81,1,"0","60458:4413"],
+        [empty+one.slice(7),7,0,"49,58,97,49","55970:4412"],
+        [maximum,7,0,"255,255,255,255","41374:51781"]
     ];
     foreach(v in vectors) {
         local error=null;try {B.decodeBuilds(v[0],defs);} catch(e) {error=e;}
@@ -59,25 +59,20 @@ cases.library_collision_and_rollback <- function() {
     store.set("BL99|private future bytes");lib=B.readLibrary(store,defs);
     check(lib.issue!=null && rejects(@() B.writeLibrary(store,[],defs)) && store.get()=="BL99|private future bytes","future library overwritten");
 };
-// The library belongs to the player: a second campaign sees the same builds, and the campaign that
-// donated its legacy bytes never re-donates them after the player deletes builds globally.
-cases.library_survives_campaigns_and_adopts_once <- function() {
+cases.library_ignores_old_campaign_flags <- function() {
     local a=userBuild(),b=userBuild("user_2");b.label="Second";
-    local store=libraryStore(),first=libraryFlags(),second=libraryFlags();
-    B.writeLibrary(store,[a],defs);
-    check(B.readLibrary(store,defs,second).builds.len()==1,"new campaign lost the player's library");
-    check(!second.has(B.MovedFlag),"campaign without legacy bytes was marked migrated");
-    local legacy=libraryFlags();legacy.set(B.LibraryFlag,B.encodeBuilds([b],defs));
-    local lib=B.readLibrary(store,defs,legacy);
-    check(lib.builds.len()==2 && lib.issue==null && lib.notice==null,"legacy campaign builds were not adopted");
-    check(legacy.has(B.MovedFlag) && legacy.get(B.LibraryFlag)!=null,"adoption did not mark or preserve the legacy campaign");
-    check(B.readLibrary(store,defs,legacy).builds.len()==2,"repeated load duplicated adopted builds");
-    B.writeLibrary(store,[a],defs);
-    check(B.readLibrary(store,defs,legacy).builds.len()==1,"a deleted build reappeared from the donating campaign");
-    local damaged=libraryFlags();damaged.set(B.LibraryFlag,"BL99|unreadable");
-    lib=B.readLibrary(store,defs,damaged);
-    check(lib.notice!=null && lib.issue==null && lib.builds.len()==1 && !damaged.has(B.MovedFlag),
-        "unreadable campaign bytes were not reported or destroyed the player's library");
+    local flags=libraryFlags(),raw=B.encodeBuilds([b],defs),wire=B.encodeBuilds([a],defs);
+    flags.set("BroLedger.Library",raw);::World<-{Flags=flags};
+    foreach(seed in [null,wire]) {
+        local store=libraryStore(seed),lib=B.readLibrary(store,defs);
+        check(lib.issue==null && lib.builds.len()==(seed==null ? 0 : 1),"campaign bytes entered the player library");
+        check(store.has()==(seed!=null) && store.held.value==seed,"reading changed the store");
+        check(flags.get("BroLedger.Library")==raw && !flags.has("BroLedger.LibraryMoved"),"old campaign flags changed");
+    }
+};
+cases.bl1_text_reports_retirement <- function() {
+    local error=null;try {B.decodeBuilds("BL1|1:0",defs);} catch(e) {error=e;}
+    check(error=="BL1 text from Bro Ledger 0.4 is no longer supported. Ask for a BL2 export from Bro Planner 0.5 or later.","BL1 rejection did not explain how to export supported text");
 };
 cases.gradual_threshold_and_joint_budget <- function() {
     local b=userBuild(),p=B.makePlan(b),s=fixture();s.normalRows=0;s.free=0;s.futurePerks=0;
@@ -122,7 +117,7 @@ cases.payload_limits_finite_values_and_known_unsupported_perks <- function() {
     b.targets={hp=0,mdef=9.25};b.preferred={hp=0,mdef=30.5};
     local round=B.decodeBuilds(B.encodeBuilds([b],defs),defs)[0];check(round.targets.mdef==9.25&&round.preferred.mdef==30.5,"fractional goals lost");
     b.route.push("perk.unknown");check(!B.validBuild(b,defs),"known unsupported ID accepted");
-    local huge="BL1|";for(local i=0;i<48000;i++) huge+="x";
+    local huge="BL2|";for(local i=0;i<48000;i++) huge+="x";
     check(rejects(@() B.decodeBuilds(huge,defs)),"oversized text accepted");
     foreach(v in [null,[],{},17])check(rejects(@() B.decodeBuilds(v,defs)),"non-text accepted");
 };

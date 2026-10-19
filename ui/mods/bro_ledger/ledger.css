@@ -80,8 +80,6 @@
 .bl-build-name { display:block;word-wrap:break-word; }
 .bl-starter-label { display:block;font-size:1.4rem;line-height:1.8rem;color:#cfbd9f; }
 .bl-starter-notice { padding:.8rem;border-left:.2rem solid #9c8357;background:#30281d; }
-.bl-alternatives { border-top:1px solid #746044;margin-top:1.2rem;padding-top:.6rem; }
-.bl-alternatives .bl-button { width:100%;max-width:48rem; }
 .bl-paging { padding:.5rem; }
 .bl-paging .bl-button { display:inline-block;margin-right:.6rem;width:12rem;vertical-align:middle; }
 .bl-paging .bl-line { display:inline-block;width:10rem;vertical-align:middle;margin:0; }
