@@ -27,7 +27,7 @@ The player loop is: open a brother → Evaluate → create/import and compare co
 
 ## UI
 
-Use the game's visual language and controls. Keep text readable and structure obvious. Write player-facing text with ordinary punctuation, parentheses or line breaks; never use floating middle-dot (·) separators. Do not squeeze content to satisfy a viewport measurement. Source-derived geometry remains a hypothesis until rendered in game.
+Use the game's visual language and controls. Keep text readable and structure obvious. Write player-facing text with ordinary punctuation, parentheses or line breaks; never use floating middle-dot (·) separators. Preview and test UI at 1920×1080 and 2560×1440; skip smaller viewports unless the owner asks. Do not squeeze content to satisfy a viewport measurement. Source-derived geometry remains a hypothesis until rendered in game.
 
 ## Authorization
 

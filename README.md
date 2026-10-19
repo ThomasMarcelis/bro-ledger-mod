@@ -16,7 +16,7 @@ Requires Battle Brothers 1.5.2.3 with all DLC, [Modern Hooks](https://github.com
 
 To remove, delete the ZIP. Your library and tracked plans are left in place for a reinstall.
 
-**1.2.0 is an unverified prerelease.** Free perk order, Copy & edit, the pre-0.7 cleanup and 1.1.0's scoring redesign pass standalone checks. 1.1.0 also passed browser preflight at 1920×1080, 2560×1440, 1600×900 and 1280×800; 1.2.0's editor changes have not had a fresh rendered check. Neither verifies the game VM or real game transport; in-game player-loop and save/removal/reinstall validation remain pending. Earlier 1.0.1 live and Steam Deck layout evidence does not certify this version.
+**1.2.0 is an unverified prerelease.** Free perk order, Copy & edit, the pre-0.7 cleanup and 1.1.0's scoring redesign pass standalone checks. Browser fixtures at 1920×1080 show 1.2.0's editor, Copy & edit and sheet guidance without overlap. Browser fixtures don't verify the game VM or real game transport; in-game player-loop and save/removal/reinstall validation remain pending. Earlier 1.0.1 live and Steam Deck layout evidence does not certify this version.
 
 **Since 1.1.0, scoring uses Goal gap for all builds and saved plans.** Weights value progress in fixed ordinary-roll units toward Ideal; Minimum breaks exact ties instead of marking half satisfaction. Saved numbers and plans remain intact, but forecasts, advice and ranking can change. Review your tracked goals when upgrading from 1.0.x. BL1/BL2 text remains readable; versions before 1.1.0 score the same text differently.
 
