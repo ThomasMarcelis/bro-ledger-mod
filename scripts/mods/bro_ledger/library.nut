@@ -176,6 +176,18 @@
     for(local i=1;i<=this.LibraryLimit*2+1;i++) if(this.findBuild("user_"+i,builds)==null) return "user_"+i;
     throw "Library is full.";
 };
+::BroLedger.copyLabel <- function(label, builds)
+{
+    local length=::Math.min(label.len(),28);
+    while(!this.validUTF8(label.slice(0,length))) length--;
+    local prefix=label.slice(0,length);
+    for(local n=1;n<=builds.len()+1;n++) {
+        label=prefix+" (copy "+n+")";local used=false;
+        foreach(existingBuild in builds) if(existingBuild.label.tolower()==label.tolower()) used=true;
+        if(!used) break;
+    }
+    return label;
+};
 // BL2 stores one integer weight after each Minimum/Ideal pair.
 ::BroLedger.encodeBuilds <- function(builds, defs=null)
 {
@@ -289,14 +301,7 @@
         if(duplicate && policy=="skip") continue;
         local b=this.copy(source);
         if(duplicate) {
-            b.id=this.newBuildID(out);local length=::Math.min(b.label.len(),28);
-            while(!this.validUTF8(b.label.slice(0,length))) length--;
-            local prefix=b.label.slice(0,length);
-            for(local n=1;n<=out.len()+1;n++) {
-                b.label=prefix+" (copy "+n+")";local used=false;
-                foreach(existingBuild in out) if(existingBuild.label.tolower()==b.label.tolower()) used=true;
-                if(!used) break;
-            }
+            b.id=this.newBuildID(out);b.label=this.copyLabel(b.label,out);
         }
         out.push(b);
     }

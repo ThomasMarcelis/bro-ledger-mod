@@ -323,8 +323,11 @@ var BroLedgerUI = (function () {
             if(build.source==='starter') text(details,'Starter builds are original examples of common community archetypes. They may be suboptimal; use them as starting guides and adjust them to your brothers and playstyle.').addClass('bl-starter-notice');
             self.targets(details,build,data.stars,false); self.perkOrder(details,build,data.defs,false);
             var actions=$('<div class="bl-toolbar"/>').appendTo(details);
-            button(actions,build.source==='starter'?'Copy & edit':'Edit',function () {
-                if (self.current(data,popup) && !data.libraryIssue) self.editor(data,(build.source==='starter'?data.starters:data.library).filter(function (b) {return b.id===build.id;})[0],build.source==='starter');
+            if(build.source!=='starter') button(actions,'Edit',function () {
+                if (self.current(data,popup) && !data.libraryIssue) self.editor(data,data.library.filter(function (b) {return b.id===build.id;})[0]);
+            });
+            button(actions,'Copy & edit',function () {
+                if (self.current(data,popup) && !data.libraryIssue) self.editor(data,(build.source==='starter'?data.starters:data.library).filter(function (b) {return b.id===build.id;})[0],true,build.source);
             });
             button(actions,'Export',function () { if (self.current(data,popup)) self.request('export',{build:build.id,source:build.source},function (reply) {self.share(reply,reply.share);}); });
             if(build.source!=='starter') button(actions,'Delete',function () {
@@ -370,10 +373,10 @@ var BroLedgerUI = (function () {
         }
         draw();
     };
-    Controller.prototype.editor = function (data, original, copy) {
-        var self=this, popup=this.dialog(copy?'Copy starter':original?'Edit build':'Create build');popup.addClass('bl-editor');
+    Controller.prototype.editor = function (data, original, copy, source) {
+        var self=this, popup=this.dialog(copy?'Copy build':original?'Edit build':'Create build');popup.addClass('bl-editor');
         var b=original?JSON.parse(JSON.stringify(original)):{id:data.newBuildID,label:'',targets:{},preferred:{},route:[],flex:[],weaponTags:[],playstyleTags:[]};
-        if(copy)b.id=data.newBuildID;
+        if(copy){b.id=data.newBuildID;var labels=data.copyLabels&&data.copyLabels[source];b.label=labels&&labels[original.id]||b.label;}
         if(!b.weights)b.weights={};
         var body=$('<div class="bl-editor-body"/>').appendTo(popup.findPopupDialogContentContainer());
         var title=$('<label class="bl-name-field text-font-normal"/>').text('Build name ').appendTo(body);

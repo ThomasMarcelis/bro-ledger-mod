@@ -63,7 +63,8 @@ function fixture(count=14, plan=null, issue=null) {
     const data={actor:7,epoch:42,revision:0,title:'Planner',name:'Brother',settings:{Enabled:true},plan,issue,libraryIssue:null,
         defs:{'perk.colossus':{name:'Colossus',unlock:0,row:0,column:0},'perk.gifted':{name:'Gifted',unlock:1,row:1,column:0},'perk.student':{name:'Student',unlock:0,row:0,column:1}},
         starters:[],library:Array.from({length:count},(_,i)=>build(i+1)),newBuildID:'user_33',weaponTags:['Shield','Hammer','Axe','Mace','Flail','Bow'],playstyleTags:['Tank','Frontline','Ranged'],
-        stars:{},builds:[]};
+        stars:{},builds:[],copyLabels:{library:{},starter:{}}};
+    data.library.forEach(b=>data.copyLabels.library[b.id]=b.label+' (copy 1)');
     data.builds=data.library.map((b,i)=>({...b,source:'library',score:100-i,order:b.route,projection:{horizon:11},jointState:'possible',statRows:[],
         route:{remaining:b.route,acquired:[],blocked:[],offplan:[],unknown:[],feasible:true}}));
     owner.data=data;owner.compare(data);

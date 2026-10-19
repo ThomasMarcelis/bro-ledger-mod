@@ -51,6 +51,18 @@ cases.create_edit_track_delete_disabled_continuity <- function() {
     check(!f.request("enabled",{enabled=false}).plan.enabled,"disable failed");
     check(f.request("enabled",{enabled=true}).plan.enabled&&same(saved,B.actorState(f.actor).plan),"reenable replaced intent");
 };
+cases.catalog_copy_labels_follow_library_changes <- function() {
+    local f=commandFixture(),starter=B.StarterBuilds[0],r=f.request("evaluate");
+    check(r.copyLabels.library.len()==0 && r.copyLabels.starter[starter.id]==starter.label,"unused starter name was suffixed");
+    check(!("copyLabels" in f.request("refresh")),"non-catalog view generated copy labels");
+    local b=userBuild(starter.id);b.label=starter.label.tolower();
+    r=f.request("saveBuild",{definition=b,create=true});
+    check(r.copyLabels.library[b.id]==b.label+" (copy 1)" && r.copyLabels.starter[starter.id]==starter.label+" (copy 1)","saved personal name did not reserve both copy labels");
+    r=f.request("import",{text=B.encodeBuilds([b],defs),policy="copy"});
+    check(r.copyLabels.library[b.id]==b.label+" (copy 2)" && r.copyLabels.starter[starter.id]==starter.label+" (copy 2)","imported copy did not reserve its suffix");
+    r=f.request("deleteBuild",{build=b.id});
+    check(r.copyLabels.starter[starter.id]==starter.label,"deleted personal name still reserved the starter label");
+};
 cases.import_export_and_failure_rollbacks <- function() {
     local f=commandFixture();f.request("evaluate");local b=userBuild(),wire=B.encodeBuilds([b],defs);
     check(!("error" in f.request("import",{text=wire,policy="reject"})),"import failed");

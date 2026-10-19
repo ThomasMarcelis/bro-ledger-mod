@@ -61,7 +61,16 @@
         libraryIssue=library.issue,library=library.builds,
         starters=starters,effects=settings.ShowPerkEffects ? this.currentEffects(actor,snapshot.perks) : null,
         tagIcons=this.tagIcons(defs),weaponTags=this.WeaponTags,playstyleTags=this.PlaystyleTags};
-    if(catalog) out.builds=this.compare(snapshot,defs,library.builds,starters).builds;
+    if(catalog) {
+        out.builds=this.compare(snapshot,defs,library.builds,starters).builds;
+        out.copyLabels<-{library={},starter={}};
+        foreach(b in library.builds) out.copyLabels.library[b.id]<-this.copyLabel(b.label,library.builds);
+        foreach(b in starters) {
+            local used=false;
+            foreach(personal in library.builds) if(personal.label.tolower()==b.label.tolower()) used=true;
+            out.copyLabels.starter[b.id]<-used ? this.copyLabel(b.label,library.builds) : b.label;
+        }
+    }
     if(state.issue!=null || state.plan==null) return out;
     local saved=state.plan;
     out.plan={build=saved.build,label=saved.label,enabled=saved.enabled};

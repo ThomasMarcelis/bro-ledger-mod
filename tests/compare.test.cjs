@@ -75,6 +75,20 @@ test('editor relays eight optional pairs, multiple tags, mandatory/flex route an
     assert.equal(r.definition.preferred.rdef,15);assert.deepEqual(r.definition.weaponTags,['Shield','Hammer','Axe','Mace','Flail']);
     assert.deepEqual(r.definition.flex,['perk.gifted']);assert.equal(r.definition.route.at(-1),'perk.student');assert.equal(JSON.stringify(s.data.library),before);
 });
+test('personal copying opens an unsaved independent draft and creates it with the suggested name or original fallback',()=>{
+    for(const suggested of ['Build 1 (copy 2)',undefined]){
+        const s=fixture(1),before=JSON.stringify(s.data.library),original=s.data.library[0];
+        s.data.copyLabels.library[original.id]=suggested;
+        click(s.byClass('bl-build-row')[0]);click(s.button('Copy &amp; edit'));
+        assert.deepEqual(s.calls,[]);assert.equal(s.byClass('bl-name-field')[0].children[0].val(),suggested||original.label);
+        click(s.all().find(n=>n.attr('data-perk')==='perk.student'));
+        assert.equal(JSON.stringify(s.data.library),before);
+        click(s.button('Save build'));const r=s.calls[0].request;
+        assert.equal(r.action,'saveBuild');assert.equal(r.create,true);assert.equal(r.definition.id,s.data.newBuildID);
+        assert.equal(r.definition.label,suggested||original.label);assert.equal(r.definition.route.at(-1),'perk.student');
+        assert.equal(JSON.stringify(s.data.library),before);
+    }
+});
 test('failed validation retains editor data and permits correction; stale editor callbacks cannot save',()=>{
     const s=fixture(0);click(s.button('Create build'));const name=s.byClass('bl-name-field')[0].children[0];name.val('<b>literal</b>');
     click(s.button('Save build'));s.reply({error:'Invalid targets'});assert.equal(name.val(),'<b>literal</b>');
@@ -267,6 +281,7 @@ test('weights retain ignored ranges, validate at the backend, and native checkbo
 test('starter source filtering, tracking and unsaved copying never modify a template',()=>{
     const s=fixture(1),template=JSON.parse(JSON.stringify(s.data.library[0]));
     template.label='Starter example';s.data.starters=[template];
+    s.data.copyLabels.starter[template.id]=template.label;
     s.data.builds.push({...s.data.builds[0],source:'starter',label:template.label});
     s.owner.compare(s.data);const before=JSON.stringify(s.data.starters);
     click(s.button('Source: All'));click(s.button('Starters'));

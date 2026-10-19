@@ -59,6 +59,14 @@ cases.library_collision_and_rollback <- function() {
     store.set("BL99|private future bytes");lib=B.readLibrary(store,defs);
     check(lib.issue!=null && rejects(@() B.writeLibrary(store,[],defs)) && store.get()=="BL99|private future bytes","future library overwritten");
 };
+cases.copy_labels_use_first_free_suffix_and_utf8_boundary <- function() {
+    check(B.copyLabel("Tank",[])=="Tank (copy 1)","first copy suffix changed");
+    local occupied=userBuild();occupied.label="tank (COPY 1)";
+    check(B.copyLabel("Tank",[occupied])=="Tank (copy 2)","copy suffix did not skip a case-insensitive match");
+    local label="";for(local i=0;i<13;i++) label+="€";label+="a";
+    local copy=B.copyLabel(label,[]);
+    check(label.len()==40 && copy==label.slice(0,27)+" (copy 1)" && B.plainName(copy,40),"copy name split UTF-8 or exceeded the name limit");
+};
 cases.library_ignores_old_campaign_flags <- function() {
     local a=userBuild(),b=userBuild("user_2");b.label="Second";
     local flags=libraryFlags(),raw=B.encodeBuilds([b],defs),wire=B.encodeBuilds([a],defs);
